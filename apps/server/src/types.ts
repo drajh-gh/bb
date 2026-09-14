@@ -40,6 +40,8 @@ export interface ServerRuntimeConfig {
   appUrl?: string;
   devAppPort?: number;
   launchId?: string;
+  sidebarMark?: string;
+  sidebarMarkLabel?: string;
 }
 
 export interface AppDeps {

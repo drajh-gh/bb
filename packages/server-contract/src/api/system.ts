@@ -198,6 +198,14 @@ export const systemConfigResponseSchema = z.object({
   voiceTranscriptionEnabled: z.boolean(),
   aiServices: systemAiServicesSchema,
   dataDir: z.string(),
+  sidebarIdentity: z
+    .object({
+      mark: z.string().min(1).max(8),
+      label: z.string().min(1).max(80),
+    })
+    .nullable()
+    .optional()
+    .default(null),
 });
 export type SystemConfigResponse = z.infer<typeof systemConfigResponseSchema>;
 

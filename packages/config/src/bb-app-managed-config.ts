@@ -25,6 +25,8 @@ export type BbAppManagedConfigKey =
   | "BB_INFERENCE"
   | "BB_INFERENCE_FALLBACK"
   | "BB_LOG_LEVEL"
+  | "BB_SIDEBAR_MARK"
+  | "BB_SIDEBAR_MARK_LABEL"
   | "BB_TRANSCRIPTION";
 
 export const BB_APP_MANAGED_CONFIG_KEYS: BbAppManagedConfigKey[] = [
@@ -32,6 +34,8 @@ export const BB_APP_MANAGED_CONFIG_KEYS: BbAppManagedConfigKey[] = [
   "BB_INFERENCE",
   "BB_INFERENCE_FALLBACK",
   "BB_LOG_LEVEL",
+  "BB_SIDEBAR_MARK",
+  "BB_SIDEBAR_MARK_LABEL",
   "BB_TRANSCRIPTION",
 ];
 
@@ -53,6 +57,8 @@ const bbAppManagedConfigValuesSchema = z
     BB_INFERENCE: z.string().optional(),
     BB_INFERENCE_FALLBACK: z.string().optional(),
     BB_LOG_LEVEL: z.string().optional(),
+    BB_SIDEBAR_MARK: z.string().trim().min(1).max(8).optional(),
+    BB_SIDEBAR_MARK_LABEL: z.string().trim().min(1).max(80).optional(),
     BB_TRANSCRIPTION: z.string().optional(),
   })
   .strict();

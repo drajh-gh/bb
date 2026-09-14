@@ -61,8 +61,14 @@ function replaceRuntimeConfig(
   targetConfig: ServerRuntimeConfig,
   nextConfig: ServerRuntimeConfig,
 ): void {
-  if (nextConfig.appUrl === undefined) {
-    delete targetConfig.appUrl;
+  for (const key of [
+    "appUrl",
+    "sidebarMark",
+    "sidebarMarkLabel",
+  ] as const) {
+    if (nextConfig[key] === undefined) {
+      delete targetConfig[key];
+    }
   }
   Object.assign(targetConfig, nextConfig);
 }
@@ -76,6 +82,18 @@ function setOptionalAppUrl(
     return;
   }
   config.appUrl = value;
+}
+
+function setOptionalSidebarValue(
+  config: ServerRuntimeConfig,
+  key: "sidebarMark" | "sidebarMarkLabel",
+  value: string | undefined,
+): void {
+  if (value === undefined) {
+    delete config[key];
+    return;
+  }
+  config[key] = value;
 }
 
 function applyManagedProcessEnv(args: ApplyManagedProcessEnvArgs): void {
@@ -125,6 +143,16 @@ export function applyBbAppManagedConfig(
     managedConfig.BB_APP_URL !== undefined
       ? validateOptionalUrl("BB_APP_URL", managedConfig.BB_APP_URL)
       : args.baseConfig.appUrl,
+  );
+  setOptionalSidebarValue(
+    args.targetConfig,
+    "sidebarMark",
+    managedConfig.BB_SIDEBAR_MARK ?? args.baseConfig.sidebarMark,
+  );
+  setOptionalSidebarValue(
+    args.targetConfig,
+    "sidebarMarkLabel",
+    managedConfig.BB_SIDEBAR_MARK_LABEL ?? args.baseConfig.sidebarMarkLabel,
   );
 }
 

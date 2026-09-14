@@ -91,6 +91,8 @@ describe("bb-app managed config", () => {
           BB_APP_URL: "https://stored-app.example.test",
           BB_INFERENCE: "anthropic/claude-sonnet-4-5",
           BB_INFERENCE_FALLBACK: "openai/gpt-5.4-mini",
+          BB_SIDEBAR_MARK: "羽田",
+          BB_SIDEBAR_MARK_LABEL: "Haneda Operations",
           BB_TRANSCRIPTION: "openai/gpt-4o-transcribe",
         },
       },
@@ -107,6 +109,8 @@ describe("bb-app managed config", () => {
       inferenceFallbackModel: "openai/gpt-5.4-mini",
       inferenceModel: "anthropic/claude-sonnet-4-5",
       openAiApiKey: "stored-openai-key",
+      sidebarMark: "羽田",
+      sidebarMarkLabel: "Haneda Operations",
       transcriptionModel: "openai/gpt-4o-transcribe",
     });
   });
@@ -120,6 +124,8 @@ describe("bb-app managed config", () => {
       managedConfig: {
         config: {
           BB_APP_URL: "https://stored-app.example.test",
+          BB_SIDEBAR_MARK: "羽田",
+          BB_SIDEBAR_MARK_LABEL: "Haneda Operations",
         },
       },
       managedEnvFile: {
@@ -138,6 +144,8 @@ describe("bb-app managed config", () => {
 
     expect(targetConfig.appUrl).toBe("https://ambient-app.example.test");
     expect(targetConfig.openAiApiKey).toBe("ambient-openai-key");
+    expect(targetConfig.sidebarMark).toBeUndefined();
+    expect(targetConfig.sidebarMarkLabel).toBeUndefined();
   });
 
   it("applies custom models over the ambient runtime config", () => {

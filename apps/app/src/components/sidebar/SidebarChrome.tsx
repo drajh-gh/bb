@@ -9,11 +9,14 @@ import {
   shouldUseMacosDesktopChrome,
 } from "@/lib/bb-desktop";
 import { SidebarHistoryNavigationControls } from "./SidebarHistoryNavigationControls";
+import { useSystemConfig } from "@/hooks/queries/system-queries";
 
 export function SidebarTopReserveRow({ testId }: { testId: string }) {
   const closeOnMobile = useCloseMobileSidebar();
   const [desktopInfo] = useState(getBbDesktopInfo);
   const usesDesktopChrome = shouldUseMacosDesktopChrome(desktopInfo);
+  const { data: systemConfig } = useSystemConfig();
+  const sidebarIdentity = systemConfig?.sidebarIdentity;
 
   return (
     <div
@@ -24,6 +27,20 @@ export function SidebarTopReserveRow({ testId }: { testId: string }) {
         usesDesktopChrome && MACOS_WINDOW_DRAG_CLASS,
       )}
     >
+      {sidebarIdentity ? (
+        <span
+          aria-label={sidebarIdentity.label}
+          className={cn(
+            "mr-auto inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-sm border border-primary/35 bg-primary/10 px-1.5 text-xs font-semibold tracking-wide text-primary shadow-sm",
+            usesDesktopChrome && MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
+          )}
+          data-testid="sidebar-identity-mark"
+          role="img"
+          title={sidebarIdentity.label}
+        >
+          {sidebarIdentity.mark}
+        </span>
+      ) : null}
       <SidebarHistoryNavigationControls
         onNavigate={closeOnMobile}
         className={

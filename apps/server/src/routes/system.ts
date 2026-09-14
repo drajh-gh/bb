@@ -225,6 +225,13 @@ export function registerSystemRoutes(
         })),
       },
       dataDir: deps.config.dataDir,
+      sidebarIdentity:
+        deps.config.sidebarMark === undefined
+          ? null
+          : {
+              mark: deps.config.sidebarMark,
+              label: deps.config.sidebarMarkLabel ?? deps.config.sidebarMark,
+            },
     };
   }
 

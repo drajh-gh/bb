@@ -17,6 +17,33 @@ function parseWithWarnings(rawConfig: unknown) {
 }
 
 describe("parseBbAppManagedConfig", () => {
+  it("parses bounded sidebar identity values", () => {
+    expect(
+      parseBbAppManagedConfig({
+        config: {
+          BB_SIDEBAR_MARK: " 羽田 ",
+          BB_SIDEBAR_MARK_LABEL: " Haneda Operations ",
+        },
+      }).config,
+    ).toMatchObject({
+      BB_SIDEBAR_MARK: "羽田",
+      BB_SIDEBAR_MARK_LABEL: "Haneda Operations",
+    });
+  });
+
+  it("rejects empty or oversized sidebar identity values", () => {
+    expect(() =>
+      parseBbAppManagedConfig({
+        config: { BB_SIDEBAR_MARK: "" },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseBbAppManagedConfig({
+        config: { BB_SIDEBAR_MARK: "123456789" },
+      }),
+    ).toThrow();
+  });
+
   it("parses shared user and project skill roots", () => {
     expect(
       parseBbAppManagedConfig({

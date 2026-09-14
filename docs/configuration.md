@@ -10,6 +10,8 @@ Use `bb-app config` for non-secret bb settings:
 npx bb-app config set BB_APP_URL https://<machine>.<tailnet>.ts.net
 npx bb-app config set BB_INFERENCE codex/gpt-5.6-luna
 npx bb-app config set BB_INFERENCE_FALLBACK codex/gpt-5.4-mini
+npx bb-app config set BB_SIDEBAR_MARK '羽田'
+npx bb-app config set BB_SIDEBAR_MARK_LABEL 'Haneda Operations'
 npx bb-app config set BB_TRANSCRIPTION codex/gpt-transcribe
 npx bb-app config list
 npx bb-app config unset BB_APP_URL
@@ -87,10 +89,10 @@ running, the new values apply on the next start. If you edit either file by
 hand, run `npx bb-app config refresh` to apply the files to a running server.
 
 The live reload applies config keys such as `BB_APP_URL`, `BB_INFERENCE`,
-`BB_INFERENCE_FALLBACK`, and `BB_TRANSCRIPTION`, plus env values explicitly
-consumed at runtime such as `OPENAI_API_KEY`. If one of those config keys is
-stored with `bb-app env` instead, it is startup-only; use `bb-app config` when
-you need a live change.
+`BB_INFERENCE_FALLBACK`, `BB_SIDEBAR_MARK`, `BB_SIDEBAR_MARK_LABEL`, and
+`BB_TRANSCRIPTION`, plus env values explicitly consumed at runtime such as
+`OPENAI_API_KEY`. If one of those config keys is stored with `bb-app env`
+instead, it is startup-only; use `bb-app config` when you need a live change.
 
 `BB_LOG_LEVEL` is the startup-only `bb-app config` key. The complete current
 set of startup-only server or launcher env entries is:
@@ -147,6 +149,8 @@ signal it, so a stale file left by a crash cannot stop an unrelated process.
 | `BB_SERVER_PORT`        | `bb-app env`, environment, or `--server-port`      | Startup-only            | HTTP listener port. Defaults to `38886`. A full launcher or desktop app restart is required after a persistent set or unset.                                                                                                                                                                                                                                                                                   |
 | `BB_HOST_DAEMON_PORT`   | `bb-app env`, environment, or `--host-daemon-port` | Startup-only            | Local host-daemon API port. Defaults to `38887`. A full launcher or desktop app restart is required after a persistent set or unset.                                                                                                                                                                                                                                                                           |
 | `BB_LOG_LEVEL`          | `bb-app config`                                    | Startup-only debugging  | Log level: `trace`, `debug`, `info`, `warn`, `error`, or `fatal`. A full launcher or desktop app restart is required.                                                                                                                                                                                                                                                                                          |
+| `BB_SIDEBAR_MARK`       | `bb-app config`                                    | Optional identity       | Up to eight characters shown as a compact identity mark in the sidebar header. Unset it to preserve the standard unbranded header.                                                                                                                                                                                                                                                                            |
+| `BB_SIDEBAR_MARK_LABEL` | `bb-app config`                                    | Optional accessibility  | Accessible name and hover title for the sidebar mark. Defaults to the mark text when omitted.                                                                                                                                                                                                                                                                                                                  |
 | `OPENAI_API_KEY`        | `bb-app env`                                       | OpenAI opt-in routes    | Required only when selecting explicit OpenAI provider routes such as `openai/gpt-4o-mini` or `openai/gpt-transcribe`.                                                                                                                                                                                                                                                                                          |
 
 By default, helper inference and voice transcription use Codex credentials from
