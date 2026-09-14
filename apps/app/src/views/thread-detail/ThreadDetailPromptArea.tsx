@@ -167,7 +167,7 @@ interface ThreadDetailPromptAreaProps {
   environmentMachineProvider?: MachineProviderPresentation | null;
   environmentIcon?: IconName;
   environmentLabel?: string;
-  environmentTypeLabel?: string;
+  environmentProviderName?: string;
   onCreateNewThreadInEnvironment?: () => void;
   onPullRequestDraft?: () => void;
   onPullRequestMerge?: (method: PullRequestMergeMethod) => void;
@@ -362,7 +362,7 @@ export function ThreadDetailPromptArea({
   environmentMachineProvider,
   environmentIcon,
   environmentLabel,
-  environmentTypeLabel,
+  environmentProviderName,
   onCreateNewThreadInEnvironment,
   onPullRequestDraft,
   onPullRequestMerge,
@@ -1471,7 +1471,7 @@ export function ThreadDetailPromptArea({
           environmentCompactLabel={environmentCompactLabel}
           environmentHost={environmentHost}
           environmentIcon={environmentIcon}
-          environmentTypeLabel={environmentTypeLabel}
+          environmentProviderName={environmentProviderName}
           environmentMachineProvider={environmentMachineProvider}
           environmentCheckout={environmentCheckout}
           onCreateNewThreadInEnvironment={onCreateNewThreadInEnvironment}
@@ -1484,7 +1484,7 @@ export function ThreadDetailPromptArea({
       environmentIcon,
       environmentLabel,
       environmentMachineProvider,
-      environmentTypeLabel,
+      environmentProviderName,
       onCreateNewThreadInEnvironment,
       projectName,
       thread.environmentId,

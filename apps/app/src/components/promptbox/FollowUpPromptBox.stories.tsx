@@ -229,7 +229,7 @@ function makeEnvironmentSummary({
       environmentLabel={summaryDisplay?.label}
       environmentCompactLabel={summaryDisplay?.compactLabel}
       environmentIcon={summaryDisplay?.icon}
-      environmentTypeLabel={summaryDisplay?.typeLabel}
+      environmentProviderName={summaryDisplay?.providerName ?? undefined}
       environmentCheckout={checkoutDisplay}
       onCreateNewThreadInEnvironment={onCreateNewThreadInEnvironment}
     />

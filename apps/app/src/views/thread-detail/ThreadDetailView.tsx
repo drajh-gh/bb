@@ -2533,7 +2533,7 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
       environmentIcon={composerEnvironmentSummary?.icon}
       environmentLabel={composerEnvironmentSummary?.label}
       environmentMachineProvider={composerEnvironmentMachineProvider}
-      environmentTypeLabel={composerEnvironmentSummary?.typeLabel}
+      environmentProviderName={composerEnvironmentSummary?.providerName ?? undefined}
       environmentGoneStatus={threadEnvironmentGoneStatus}
       environmentHostId={environment?.hostId}
       isEnvironmentActionPending={requestEnvironmentAction.isPending}

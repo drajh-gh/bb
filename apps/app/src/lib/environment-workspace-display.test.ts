@@ -95,7 +95,6 @@ function makeDisplay(
   return {
     modeLabel: "Working locally",
     compactModeLabel: "Local",
-    typeLabel: "Local",
     providerLabel: null,
     lifecycle: null,
     id: "env_test",
@@ -216,7 +215,6 @@ describe("getEnvironmentWorkspaceSummaryDisplay", () => {
           compactModeLabel: "Provisioning",
           lifecycle: "provisioning",
           providerLabel: "Worktree",
-          typeLabel: "Worktree · Local",
         }),
         providerLookup: worktreeProviderLookup,
         hasMultipleMachines: true,
@@ -225,7 +223,7 @@ describe("getEnvironmentWorkspaceSummaryDisplay", () => {
       label: "Provisioning",
       compactLabel: "Provisioning",
       icon: "Loading",
-      typeLabel: undefined,
+      providerName: null,
     });
   });
 
@@ -252,7 +250,6 @@ describe("getEnvironmentWorkspaceSummaryDisplay", () => {
       display: makeDisplay({
         modeLabel: "Working remotely",
         compactModeLabel: "Remote",
-        typeLabel: "Remote",
       }),
     },
   ])("shows nothing for $name with no environment provider", (testCase) => {
@@ -270,7 +267,6 @@ describe("getEnvironmentWorkspaceSummaryDisplay", () => {
       display: makeDisplay({
         modeLabel: "Worktree",
         compactModeLabel: "Worktree",
-        typeLabel: "Worktree \u00b7 Local",
         providerLabel: "Worktree",
       }),
       providerLookup: worktreeProviderLookup,
@@ -281,7 +277,6 @@ describe("getEnvironmentWorkspaceSummaryDisplay", () => {
       display: makeDisplay({
         modeLabel: "Personal workspace",
         compactModeLabel: "Personal workspace",
-        typeLabel: "Personal workspace \u00b7 Local",
         providerLabel: "Personal workspace",
       }),
       providerLookup: personalProviderLookup,

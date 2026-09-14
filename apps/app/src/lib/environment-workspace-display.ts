@@ -43,7 +43,7 @@ interface EnvironmentWorkspaceSummaryDisplay {
   label: string;
   compactLabel: string;
   icon: IconName;
-  typeLabel: string | undefined;
+  providerName: string | null;
 }
 
 interface EnvironmentWorkspaceInfoDisplayArgs extends EnvironmentWorkspaceLabelArgs {
@@ -114,7 +114,7 @@ export function getEnvironmentWorkspaceSummaryDisplay({
       label: "Provisioning",
       compactLabel: "Provisioning",
       icon: "Loading",
-      typeLabel: undefined,
+      providerName: null,
     };
   }
   if (display.lifecycle === "destroyed") {
@@ -122,7 +122,7 @@ export function getEnvironmentWorkspaceSummaryDisplay({
       label: "Destroyed",
       compactLabel: "Destroyed",
       icon: getEnvironmentLabelIconName(providerLookup),
-      typeLabel: display.typeLabel,
+      providerName: getEnvironmentProviderDisplayName(providerLookup),
     };
   }
   if (environmentName !== null) {
@@ -130,7 +130,7 @@ export function getEnvironmentWorkspaceSummaryDisplay({
       label: environmentName,
       compactLabel: environmentName,
       icon: getEnvironmentLabelIconName(providerLookup),
-      typeLabel: display.typeLabel,
+      providerName: getEnvironmentProviderDisplayName(providerLookup),
     };
   }
   if (providerLookup.status === "loading") {
@@ -141,7 +141,7 @@ export function getEnvironmentWorkspaceSummaryDisplay({
       label: hostName,
       compactLabel: hostName,
       icon: getEnvironmentLabelIconName(providerLookup),
-      typeLabel: display.typeLabel,
+      providerName: getEnvironmentProviderDisplayName(providerLookup),
     };
   }
   const providerDisplayName = getEnvironmentProviderDisplayName(providerLookup);
@@ -151,7 +151,7 @@ export function getEnvironmentWorkspaceSummaryDisplay({
         label: providerDisplayName,
         compactLabel: providerDisplayName,
         icon: getEnvironmentLabelIconName(providerLookup),
-        typeLabel: display.typeLabel,
+        providerName: getEnvironmentProviderDisplayName(providerLookup),
       };
 }
 

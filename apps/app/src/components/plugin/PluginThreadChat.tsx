@@ -223,7 +223,7 @@ function PluginThreadChatBody({
         environmentMachineProvider={machineProviders?.find(
           (provider) => provider.id === summaryHost?.machineProviderId,
         )}
-        environmentTypeLabel={summaryDisplay?.typeLabel}
+        environmentProviderName={summaryDisplay?.providerName ?? undefined}
         environmentCheckout={
           environment.branchName
             ? formatWorkspaceCheckoutDisplay({
