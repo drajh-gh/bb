@@ -51,11 +51,12 @@ import {
 import type { SidebarDropPreviewPlacement } from "./sidebarDropPreviewPlacement";
 
 export const PINNED_THREAD_PARENT_KEY = "sidebar:pinned-threads";
-export const NEST_BAND_FRACTION = 0.6;
+export const NEST_BAND_FRACTION = 0.5;
+export const QUICK_NEST_BAND_FRACTION = 0.6;
 export const NEST_BAND_ARMED_FRACTION = 0.8;
-export const PINNED_NEST_BAND_FRACTION = 0.4;
-export const PINNED_NEST_BAND_ARMED_FRACTION = 0.5;
-export const NEST_HOVER_DELAY_MS = 700;
+export const NEST_INDENTATION_PX = 24;
+export const NEST_CANCEL_OFFSET_PX = 12;
+export const NEST_HOVER_DELAY_MS = 350;
 
 function isPointerWithinSidebar(
   pointerCoordinates: { x: number; y: number } | null,
@@ -166,13 +167,19 @@ interface ThreadRowPointerInfo {
   nesting: boolean;
 }
 
+type NestIntent = "dwell" | "immediate";
+
 interface ResolveThreadRowNestCollisionsArgs {
   collisions: Collision[];
+  draggedLeft?: number | null;
   droppableRects: ReadonlyMap<UniqueIdentifier, ClientRect>;
   pointerCoordinates: { x: number; y: number } | null;
   getBandFraction: (threadId: string) => number | null;
   onRowPointer?: (info: ThreadRowPointerInfo) => void;
-  holdNestCandidate?: (threadId: string | null) => boolean;
+  holdNestCandidate?: (
+    threadId: string | null,
+    intent: NestIntent | null,
+  ) => boolean;
 }
 
 interface NestHoverCandidate {
@@ -309,6 +316,7 @@ export function isThreadWithinSubtree(
 
 export function resolveThreadRowNestCollisions({
   collisions,
+  draggedLeft = null,
   droppableRects,
   pointerCoordinates,
   getBandFraction,
@@ -338,10 +346,12 @@ export function resolveThreadRowNestCollisions({
           droppableRects.get(rowCollision.id),
           pointerCoordinates,
           getBandFraction,
+          draggedLeft,
         );
-  const candidateThreadId = rowPointer?.inNestBand ? rowPointer.threadId : null;
+  const candidateThreadId = rowPointer?.intent ? rowPointer.threadId : null;
   const nesting =
-    holdNestCandidate(candidateThreadId) && candidateThreadId !== null;
+    holdNestCandidate(candidateThreadId, rowPointer?.intent ?? null) &&
+    candidateThreadId !== null;
   if (rowPointer) {
     onRowPointer?.({
       threadId: rowPointer.threadId,
@@ -359,7 +369,12 @@ function locateThreadRowPointer(
   rect: ClientRect | undefined,
   pointerCoordinates: { x: number; y: number } | null,
   getBandFraction: (threadId: string) => number | null,
-): { threadId: string; relativeY: number; inNestBand: boolean } | null {
+  draggedLeft: number | null,
+): {
+  threadId: string;
+  relativeY: number;
+  intent: NestIntent | null;
+} | null {
   if (!rect || rect.height <= 0 || !pointerCoordinates) return null;
   const { x, y } = pointerCoordinates;
   const withinRect =
@@ -370,9 +385,22 @@ function locateThreadRowPointer(
   if (!withinRect) return null;
   const relativeY = (y - rect.top) / rect.height;
   const bandFraction = getBandFraction(threadId);
-  const inNestBand =
+  const inDwellBand =
     bandFraction !== null && Math.abs(relativeY - 0.5) <= bandFraction / 2;
-  return { threadId, relativeY, inNestBand };
+  const movedLeft =
+    draggedLeft !== null && draggedLeft <= rect.left - NEST_CANCEL_OFFSET_PX;
+  const movedIntoChildIndent =
+    draggedLeft !== null && draggedLeft >= rect.left + NEST_INDENTATION_PX;
+  const inQuickBand =
+    Math.abs(relativeY - 0.5) <= QUICK_NEST_BAND_FRACTION / 2;
+  const intent = movedLeft
+    ? null
+    : movedIntoChildIndent && inQuickBand
+      ? "immediate"
+      : inDwellBand
+        ? "dwell"
+        : null;
+  return { threadId, relativeY, intent };
 }
 
 export function buildPinInsertRequest(
@@ -782,13 +810,31 @@ export function useSectionThreadDnd({
     nestCandidateRef.current = null;
   }, []);
   const holdNestCandidate = useCallback(
-    (threadId: string | null): boolean => {
+    (
+      threadId: string | null,
+      intent: NestIntent | null,
+    ): boolean => {
       const current = nestCandidateRef.current;
+      if (threadId !== null && intent === "immediate") {
+        if (current !== null && current.threadId === threadId) {
+          if (nestCandidateTimerRef.current !== null) {
+            clearTimeout(nestCandidateTimerRef.current);
+            nestCandidateTimerRef.current = null;
+          }
+          setReadyNestCandidate(current);
+          return true;
+        }
+        clearNestCandidate();
+        const candidate: NestHoverCandidate = { threadId };
+        nestCandidateRef.current = candidate;
+        setReadyNestCandidate(candidate);
+        return true;
+      }
       if (current !== null && current.threadId === threadId) {
         return current === readyNestCandidate;
       }
       clearNestCandidate();
-      if (threadId === null) return false;
+      if (threadId === null || intent === null) return false;
       const candidate: NestHoverCandidate = { threadId };
       nestCandidateRef.current = candidate;
       nestCandidateTimerRef.current = setTimeout(() => {
@@ -815,15 +861,10 @@ export function useSectionThreadDnd({
       if (activeId === null || threadId === activeId) return null;
       if (lookup.itemKindById.get(threadId) !== "thread") return null;
       const armed = armedNestThreadIdRef.current === threadId;
-      if (isPinnedItem(threadId)) {
-        return armed
-          ? PINNED_NEST_BAND_ARMED_FRACTION
-          : PINNED_NEST_BAND_FRACTION;
-      }
       if (coarsePointerRef.current) return 1;
       return armed ? NEST_BAND_ARMED_FRACTION : NEST_BAND_FRACTION;
     },
-    [isPinnedItem, lookup],
+    [lookup],
   );
   const handleRowPointer = useCallback(
     ({ threadId, relativeY, nesting }: ThreadRowPointerInfo) => {
@@ -863,6 +904,7 @@ export function useSectionThreadDnd({
       pinnedInsertRef.current = null;
       const collisions = resolveThreadRowNestCollisions({
         collisions: reorderCollisionDetection(args),
+        draggedLeft: args.collisionRect.left,
         droppableRects: args.droppableRects,
         pointerCoordinates: args.pointerCoordinates,
         getBandFraction: getNestBandFraction,

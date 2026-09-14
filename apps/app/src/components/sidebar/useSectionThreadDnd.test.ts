@@ -10,6 +10,8 @@ import {
   collectSectionThreadDndLookup,
   NEST_BAND_ARMED_FRACTION,
   NEST_BAND_FRACTION,
+  NEST_CANCEL_OFFSET_PX,
+  NEST_INDENTATION_PX,
   PINNED_THREAD_PARENT_KEY,
   resolvePinnedReorderPlacement,
   resolveSectionThreadDropDecision,
@@ -548,9 +550,14 @@ describe("thread row nest collisions", () => {
   const rowCollision = { id: rowId("parent-a") };
   const groupCollision = { id: "parent-a" };
   const droppableRects = new Map([[rowId("parent-a"), rect]]);
-  const resolve = (y: number, band: number | null) =>
+  const resolve = (
+    y: number,
+    band: number | null,
+    draggedLeft: number | null = null,
+  ) =>
     resolveThreadRowNestCollisions({
       collisions: [rowCollision, groupCollision],
+      draggedLeft,
       droppableRects,
       pointerCoordinates: { x: 20, y },
       getBandFraction: () => band,
@@ -571,6 +578,35 @@ describe("thread row nest collisions", () => {
       rowCollision,
       groupCollision,
     ]);
+  });
+
+  it("nests immediately after moving one indentation step to the right", () => {
+    const intents: unknown[] = [];
+    const collisions = resolveThreadRowNestCollisions({
+      collisions: [rowCollision, groupCollision],
+      draggedLeft: NEST_INDENTATION_PX,
+      droppableRects,
+      pointerCoordinates: { x: 20, y: 106 },
+      getBandFraction: () => NEST_BAND_FRACTION,
+      holdNestCandidate: (threadId, intent) => {
+        intents.push({ threadId, intent });
+        return intent === "immediate";
+      },
+    });
+
+    expect(collisions).toEqual([rowCollision, groupCollision]);
+    expect(intents).toEqual([
+      { threadId: "parent-a", intent: "immediate" },
+    ]);
+    expect(resolve(106, NEST_BAND_FRACTION, NEST_INDENTATION_PX - 1)).toEqual(
+      [groupCollision],
+    );
+  });
+
+  it("cancels parenting after moving twelve pixels left", () => {
+    expect(resolve(114, NEST_BAND_ARMED_FRACTION, -NEST_CANCEL_OFFSET_PX)).toEqual(
+      [groupCollision],
+    );
   });
 
   it("reports where the pointer sits on the row", () => {
