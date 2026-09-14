@@ -242,12 +242,10 @@ describe("getEnvironmentWorkspaceSummaryDisplay", () => {
       }),
     ).toMatchObject({ label: "Destroyed", compactLabel: "Destroyed" });
   });
-
   it.each([
     {
       name: "a local project checkout",
       display: makeDisplay(),
-      providerLookup: noProviderLookup,
     },
     {
       name: "a remote project checkout",
@@ -256,41 +254,58 @@ describe("getEnvironmentWorkspaceSummaryDisplay", () => {
         compactModeLabel: "Remote",
         typeLabel: "Remote",
       }),
-      providerLookup: noProviderLookup,
     },
+  ])("shows nothing for $name with no environment provider", (testCase) => {
+    expect(
+      getSummaryDisplay({
+        display: testCase.display,
+        providerLookup: noProviderLookup,
+      }),
+    ).toBeNull();
+  });
+
+  it.each([
     {
       name: "a worktree",
       display: makeDisplay({
         modeLabel: "Worktree",
         compactModeLabel: "Worktree",
-        typeLabel: "Worktree · Local",
+        typeLabel: "Worktree \u00b7 Local",
         providerLabel: "Worktree",
       }),
       providerLookup: worktreeProviderLookup,
+      label: "Worktree",
     },
     {
       name: "a personal workspace",
       display: makeDisplay({
         modeLabel: "Personal workspace",
         compactModeLabel: "Personal workspace",
-        typeLabel: "Personal workspace · Local",
+        typeLabel: "Personal workspace \u00b7 Local",
         providerLabel: "Personal workspace",
       }),
       providerLookup: personalProviderLookup,
+      label: "Personal workspace",
     },
-  ])("shows nothing for $name on a single machine", (testCase) => {
+  ])("names $name by its provider on a single machine", (testCase) => {
     expect(
       getSummaryDisplay({
         display: testCase.display,
         providerLookup: testCase.providerLookup,
       }),
-    ).toBeNull();
+    ).toMatchObject({
+      label: testCase.label,
+      compactLabel: testCase.label,
+    });
   });
 
-  it("omits the machine for a projectless thread on a lone persistent machine", () => {
+  it("names a projectless thread by its provider on a lone persistent machine", () => {
     expect(
       getSummaryDisplay({ providerLookup: personalProviderLookup }),
-    ).toBeNull();
+    ).toMatchObject({
+      label: "Personal workspace",
+      compactLabel: "Personal workspace",
+    });
   });
 
   it("shows the machine for a projectless thread once a second machine exists", () => {
@@ -302,14 +317,13 @@ describe("getEnvironmentWorkspaceSummaryDisplay", () => {
     ).toMatchObject({ label: "Michael-M4", compactLabel: "Michael-M4" });
   });
 
-  it("omits an unnamed single-machine environment with an unregistered provider", () => {
+  it("marks an unregistered provider as not installed on a single machine", () => {
     expect(
       getSummaryDisplay({
         providerLookup: findEnvironmentDisplayProvider([], "retired-cloud"),
       }),
-    ).toBeNull();
+    ).toMatchObject({ label: "retired-cloud (not installed)" });
   });
-
   it.each([
     { name: "project checkout", providerLookup: noProviderLookup },
     { name: "git-worktree", providerLookup: worktreeProviderLookup },

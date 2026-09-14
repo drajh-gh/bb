@@ -136,14 +136,23 @@ export function getEnvironmentWorkspaceSummaryDisplay({
   if (providerLookup.status === "loading") {
     return null;
   }
-  return isHostAmbiguous(hasMultipleMachines, hostType) && hostName !== null
-    ? {
-        label: hostName,
-        compactLabel: hostName,
+  if (isHostAmbiguous(hasMultipleMachines, hostType) && hostName !== null) {
+    return {
+      label: hostName,
+      compactLabel: hostName,
+      icon: getEnvironmentLabelIconName(providerLookup),
+      typeLabel: display.typeLabel,
+    };
+  }
+  const providerDisplayName = getEnvironmentProviderDisplayName(providerLookup);
+  return providerDisplayName === null
+    ? null
+    : {
+        label: providerDisplayName,
+        compactLabel: providerDisplayName,
         icon: getEnvironmentLabelIconName(providerLookup),
         typeLabel: display.typeLabel,
-      }
-    : null;
+      };
 }
 
 export function getEnvironmentWorkspaceInfoDisplay({
