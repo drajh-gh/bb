@@ -57,6 +57,7 @@ import { ThreadWorkflowCard } from "@/components/promptbox/banner/ThreadWorkflow
 import { ThreadBackgroundCommandsCard } from "@/components/promptbox/banner/ThreadBackgroundCommandsCard";
 import { ThreadModelFallbackCard } from "@/components/promptbox/banner/ThreadModelFallbackCard";
 import { InlineMessageEditorFrame } from "@/components/promptbox/InlineMessageEditorFrame";
+import type { ModelReasoningPickerHandoffSelection } from "@/components/pickers/ModelReasoningPicker";
 import type {
   WorkspaceChangedFileSelection,
   WorkspaceChangedFilesSection,
@@ -84,6 +85,7 @@ import {
   type InlineQueuedMessageEditState,
 } from "@/components/thread/embedded-chat";
 import {
+  useCreateThread,
   useCreateThreadQueuedMessage,
   useCancelThreadPlan,
   useClearThreadGoal,
@@ -102,9 +104,14 @@ import {
 } from "@/lib/mutation-errors";
 import { promptHistoryEntriesToDrafts } from "@/lib/prompt-history";
 import { usePromptHistoryEnabled } from "@/hooks/usePromptHistoryEnabled";
-import { getProjectComposeRoutePath } from "@/lib/route-paths";
+import { getThreadRoutePath } from "@/lib/route-paths";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
-import { buildThreadHandoffLocationState } from "@bb/client-core";
+import {
+  buildThreadHandoffCreateRequest,
+  buildThreadHandoffFollowUpDraft,
+  stripThreadHandoffPrefix,
+  type ThreadHandoffCreateSeed,
+} from "@bb/client-core";
 import {
   emptyPromptDraftState,
   promptDraftToInput,
@@ -130,6 +137,7 @@ import {
 } from "@bb/client-core";
 
 const ignorePromptBannerFileClick = () => {};
+const ignoreToastedCreateThreadError = () => {};
 
 export interface ThreadDetailSentMessageEdit {
   draft: PromptDraftState;
@@ -459,6 +467,7 @@ export function ThreadDetailPromptArea({
   const cancelThreadPlan = useCancelThreadPlan();
   const clearThreadGoal = useClearThreadGoal();
   const unarchiveThread = useUnarchiveThread();
+  const createThread = useCreateThread();
   const projectName = useProjectDisplayName(
     thread.projectId === PERSONAL_PROJECT_ID ? undefined : thread.projectId,
   );
@@ -606,6 +615,9 @@ export function ThreadDetailPromptArea({
   const {
     executionOptionsRouting,
     selectedProviderId,
+    setSelectedProviderId,
+    setProviderModelReasoning,
+    providers,
     providerOptions,
     hasMultipleProviders,
     selectedProviderComposerActions,
@@ -651,7 +663,9 @@ export function ThreadDetailPromptArea({
     string | null
   >(null);
   const isFallbackModelActive =
-    modelFallback !== null && overriddenFallbackIdentity !== fallbackIdentity;
+    selectedProviderId === thread.providerId &&
+    modelFallback !== null &&
+    overriddenFallbackIdentity !== fallbackIdentity;
   const effectiveSelectedModel = isFallbackModelActive
     ? modelFallback.fallbackModel
     : (activeModel?.model ?? selectedModel);
@@ -664,13 +678,128 @@ export function ThreadDetailPromptArea({
     },
     [fallbackIdentity, setSelectedModel],
   );
+  const isHandoffProviderId = useCallback(
+    (providerId: string) =>
+      providerId.length > 0 &&
+      providerId !== thread.providerId &&
+      providerOptions.some((option) => option.value === thread.providerId),
+    [providerOptions, thread.providerId],
+  );
+  const isHandoffSelection = isHandoffProviderId(selectedProviderId);
+  const sourceThreadDisplayTitle = getThreadDisplayTitle({
+    id: thread.id,
+    title: thread.title,
+    titleFallback: thread.titleFallback,
+  });
+  const handoffSeed = useMemo<ThreadHandoffCreateSeed>(
+    () => ({
+      environmentId: thread.environmentId,
+      projectId: thread.projectId,
+      sourceThreadId: thread.id,
+      sourceThreadTitle: sourceThreadDisplayTitle,
+    }),
+    [
+      sourceThreadDisplayTitle,
+      thread.environmentId,
+      thread.id,
+      thread.projectId,
+    ],
+  );
+  const syncHandoffDraft = useCallback(
+    (nextProviderId: string) => {
+      const currentDraft = promptDraft.getCurrent();
+      if (isHandoffProviderId(nextProviderId)) {
+        const seededDraft = buildThreadHandoffFollowUpDraft(
+          handoffSeed,
+          currentDraft,
+        );
+        if (seededDraft !== currentDraft) {
+          promptDraft.setDraft(seededDraft);
+        }
+        return;
+      }
+      const restoredDraft = stripThreadHandoffPrefix(handoffSeed, currentDraft);
+      if (restoredDraft !== null) {
+        promptDraft.setDraft(restoredDraft);
+      }
+    },
+    [handoffSeed, isHandoffProviderId, promptDraft],
+  );
+  const handleProviderChange = useCallback(
+    (providerId: string) => {
+      if (providerId === selectedProviderId) {
+        return;
+      }
+      if (fallbackIdentity !== null) {
+        setOverriddenFallbackIdentity(fallbackIdentity);
+      }
+      setSelectedProviderId(providerId);
+      syncHandoffDraft(providerId);
+    },
+    [
+      fallbackIdentity,
+      selectedProviderId,
+      setSelectedProviderId,
+      syncHandoffDraft,
+    ],
+  );
+  const handleHandoffSelect = useCallback(
+    (selection: ModelReasoningPickerHandoffSelection) => {
+      if (fallbackIdentity !== null) {
+        setOverriddenFallbackIdentity(fallbackIdentity);
+      }
+      setProviderModelReasoning(selection);
+      syncHandoffDraft(selection.providerId);
+    },
+    [fallbackIdentity, setProviderModelReasoning, syncHandoffDraft],
+  );
+  useEffect(() => {
+    if (isHandoffSelection) {
+      return;
+    }
+    const restoredDraft = stripThreadHandoffPrefix(
+      handoffSeed,
+      promptDraft.getCurrent(),
+    );
+    if (restoredDraft !== null) {
+      promptDraft.setDraft(restoredDraft);
+    }
+  }, [handoffSeed, isHandoffSelection, promptDraft]);
+  const hasSentMessageEdit = sentMessageEdit !== undefined;
+  useEffect(() => {
+    if (hasSentMessageEdit && isHandoffSelection) {
+      setSelectedProviderId(thread.providerId);
+      syncHandoffDraft(thread.providerId);
+    }
+  }, [
+    hasSentMessageEdit,
+    isHandoffSelection,
+    setSelectedProviderId,
+    syncHandoffDraft,
+    thread.providerId,
+  ]);
   const { typeaheadConfig, promptActions } = useComposerTypeahead({
+    projectId: thread.projectId,
+    mentionsProjectId: projectId,
+    providerId: selectedProviderId,
+    commandScope: isHandoffSelection ? "new-thread" : "thread",
+    environmentId: thread.environmentId,
+    currentThreadId: thread.id,
+    selectedProviderComposerActions,
+    resolveMentionLink,
+  });
+  const {
+    typeaheadConfig: inlineTypeaheadConfig,
+    promptActions: inlinePromptActions,
+  } = useComposerTypeahead({
     projectId: thread.projectId,
     mentionsProjectId: projectId,
     providerId: thread.providerId,
     environmentId: thread.environmentId,
     currentThreadId: thread.id,
-    selectedProviderComposerActions,
+    selectedProviderComposerActions: providers.find(
+      (provider) => provider.id === thread.providerId,
+    )?.composerActions,
     resolveMentionLink,
   });
   const runtimeDisplayStatus = thread.runtime.displayStatus;
@@ -711,6 +840,7 @@ export function ThreadDetailPromptArea({
   const isFollowUpSubmitting =
     sendMessage.isPending ||
     createQueuedMessage.isPending ||
+    createThread.isPending ||
     isFollowUpShortcutSending;
   const handleStopThread = useCallback(() => {
     stopThread.mutate(thread.id);
@@ -721,7 +851,16 @@ export function ThreadDetailPromptArea({
   const handleClearGoal = useCallback(() => {
     clearThreadGoal.mutate(thread.id);
   }, [clearThreadGoal, thread.id]);
-  const submitMode: FollowUpSubmitMode = useMemo(() => {
+  const submitMode = useMemo<FollowUpSubmitMode>(() => {
+    if (isHandoffSelection && !isStopRequested) {
+      if (effectiveSelectedModel.length > 0) {
+        return { kind: "ready" };
+      }
+      return {
+        kind: "blocked",
+        reason: modelLoadFailed ? "unavailable" : "loading-execution-options",
+      };
+    }
     return buildFollowUpSubmitMode({
       hasPendingInteraction,
       isDefaultExecutionOptionsLoading,
@@ -731,9 +870,12 @@ export function ThreadDetailPromptArea({
       runtimeDisplayStatus,
     });
   }, [
+    effectiveSelectedModel,
     handleStopThread,
     hasPendingInteraction,
     isDefaultExecutionOptionsLoading,
+    isHandoffSelection,
+    modelLoadFailed,
     pendingInteractionsInitialLoading,
     isStopRequested,
     runtimeDisplayStatus,
@@ -808,9 +950,77 @@ export function ThreadDetailPromptArea({
     supportsServiceTier,
   ]);
 
+  const createHandoffThread = useCallback(
+    async (
+      submittedDraft: PromptDraftState,
+      sendAt?: number,
+      pluginSubmission?: SendMessageRequest["pluginSubmission"],
+    ) => {
+      const baseRequest = buildThreadHandoffCreateRequest({
+        execution: {
+          providerId: selectedProviderId,
+          model: effectiveSelectedModel,
+          reasoningLevel,
+          serviceTier,
+          supportsServiceTier,
+          permissionMode,
+          executionInputSources,
+        },
+        draft: submittedDraft,
+        seed: handoffSeed,
+        ...(sendAt === undefined ? {} : { sendAt }),
+      });
+      if (baseRequest === null) {
+        return false;
+      }
+      const request = {
+        ...baseRequest,
+        ...(pluginSubmission === undefined ? {} : { pluginSubmission }),
+      };
+      const clearedSubmittedDraft =
+        promptDraft.clearIfCurrentMatches(submittedDraft);
+      setBottomAttachmentError(null);
+      try {
+        const created = await createThread.mutateAsync(request);
+        navigate(
+          getThreadRoutePath({
+            projectId: created.projectId,
+            threadId: created.id,
+          }),
+        );
+      } catch (error) {
+        if (clearedSubmittedDraft) {
+          promptDraft.restoreIfEmpty(submittedDraft);
+        }
+        throw error;
+      }
+      return true;
+    },
+    [
+      createThread,
+      effectiveSelectedModel,
+      executionInputSources,
+      handoffSeed,
+      navigate,
+      permissionMode,
+      promptDraft,
+      reasoningLevel,
+      selectedProviderId,
+      serviceTier,
+      setBottomAttachmentError,
+      supportsServiceTier,
+    ],
+  );
+
   const handleSend = useCallback(async () => {
     const submittedDraft = currentPromptDraft;
     const submittedInput = currentPromptDraftInput;
+    if (isHandoffSelection) {
+      await createHandoffThread(submittedDraft).catch(
+        ignoreToastedCreateThreadError,
+      );
+      return;
+    }
     const isQueuingMessage = shouldQueueFollowUpMessage(runtimeDisplayStatus);
     if (
       submittedInput.length === 0 ||
@@ -853,11 +1063,13 @@ export function ThreadDetailPromptArea({
       });
     }
   }, [
+    createHandoffThread,
     createQueuedMessage,
     currentPromptDraft,
     currentPromptDraftInput,
     followUpExecutionSelection,
     isDefaultExecutionOptionsLoading,
+    isHandoffSelection,
     promptDraft,
     sendMessage,
     setBottomAttachmentError,
@@ -869,6 +1081,31 @@ export function ThreadDetailPromptArea({
       submitOptions: ExperimentalComposerSubmitOptions,
       pluginSubmission: SendMessageRequest["pluginSubmission"],
     ) => {
+      if (isHandoffSelection) {
+        if (effectiveSelectedModel.length === 0) {
+          throw new Error("The selected model is still loading.");
+        }
+        let created = false;
+        try {
+          created = await createHandoffThread(
+            promptDraft.getCurrent(),
+            submitOptions.sendAt,
+            pluginSubmission,
+          );
+        } catch (submitError) {
+          throw new Error(
+            getMutationErrorMessage({
+              error: submitError,
+              fallbackMessage: "Failed to create thread",
+              lifecycleOperation: "create_thread",
+            }),
+          );
+        }
+        if (!created) {
+          throw new Error("Type a message before submitting it.");
+        }
+        return;
+      }
       if (isDefaultExecutionOptionsLoading) {
         throw new Error("This thread's model options are still loading.");
       }
@@ -906,8 +1143,11 @@ export function ThreadDetailPromptArea({
       }
     },
     [
+      createHandoffThread,
+      effectiveSelectedModel,
       followUpExecutionSelection,
       isDefaultExecutionOptionsLoading,
+      isHandoffSelection,
       promptDraft,
       sendMessage,
       setBottomAttachmentError,
@@ -1010,28 +1250,6 @@ export function ThreadDetailPromptArea({
   const handleUnarchiveCurrentThread = useCallback(() => {
     unarchiveThread.mutate({ id: thread.id });
   }, [thread.id, unarchiveThread]);
-  const sourceThreadDisplayTitle = getThreadDisplayTitle({
-    id: thread.id,
-    title: thread.title,
-    titleFallback: thread.titleFallback,
-  });
-  const handleHandoffToNewThread = useCallback(() => {
-    navigate(getProjectComposeRoutePath(thread.projectId), {
-      state: buildThreadHandoffLocationState({
-        environmentId: thread.environmentId,
-        projectId: thread.projectId,
-        sourceThreadId: thread.id,
-        sourceThreadTitle: sourceThreadDisplayTitle,
-      }),
-    });
-  }, [
-    navigate,
-    sourceThreadDisplayTitle,
-    thread.environmentId,
-    thread.id,
-    thread.projectId,
-  ]);
-
   const bottomAttachmentsConfig = useMemo(
     () => ({
       items: currentPromptDraft.attachments,
@@ -1074,6 +1292,13 @@ export function ThreadDetailPromptArea({
       onChangeMessage: promptDraft.setTextAndMentions,
       onModifierSubmit: handleBottomComposerModifierSubmit,
       onSubmit: handleBottomComposerSubmit,
+      ...(isHandoffSelection
+        ? {
+            submitLabel: "New thread",
+            submitIcon: "MessageSquarePlus",
+            submitTitle: "Create new thread (Enter)",
+          }
+        : {}),
       compactPromptPlaceholder,
       promptPlaceholder,
       canModifierSubmit: canSubmitModifierShortcut,
@@ -1088,6 +1313,7 @@ export function ThreadDetailPromptArea({
       handleBottomComposerModifierSubmit,
       handleBottomComposerSubmit,
       isFollowUpSubmitting,
+      isHandoffSelection,
       promptHistoryDrafts,
       promptPlaceholder,
       promptDraft.setDraft,
@@ -1141,10 +1367,14 @@ export function ThreadDetailPromptArea({
   ]);
   const bottomExecutionConfig = useMemo(
     () => ({
-      providerRouting: executionOptionsRouting,
+      providerRouting:
+        thread.environmentId === null
+          ? executionOptionsRouting
+          : { environmentId: thread.environmentId },
       provider: {
         options: providerOptions,
         selectedId: selectedProviderId,
+        onChange: handleProviderChange,
         hasMultiple: hasMultipleProviders,
       },
       model: {
@@ -1171,17 +1401,18 @@ export function ThreadDetailPromptArea({
         options: reasoningOptions,
         onChange: setReasoningLevel,
       },
-      footerAction: {
-        label: "Handoff to new thread",
-        onClick: handleHandoffToNewThread,
+      handoff: {
+        sourceProviderId: thread.providerId,
+        onSelect: handleHandoffSelect,
       },
     }),
     [
       effectiveSelectedModel,
       executionOptionsRouting,
       hasMultipleProviders,
-      handleHandoffToNewThread,
+      handleHandoffSelect,
       handleModelChange,
+      handleProviderChange,
       isLoadingModels,
       modelLoadFailed,
       modelLoadError,
@@ -1198,13 +1429,21 @@ export function ThreadDetailPromptArea({
       setServiceTier,
       supportsServiceTier,
       serviceTierFastLabel,
+      thread.environmentId,
+      thread.providerId,
     ],
   );
   const compactExecutionConfig = useMemo(() => {
-    const { footerAction: _footerAction, ...executionWithoutFooterAction } =
-      bottomExecutionConfig;
-    return executionWithoutFooterAction;
-  }, [bottomExecutionConfig]);
+    const {
+      handoff: _handoff,
+      provider: { onChange: _onProviderChange, ...lockedProvider },
+      ...lockedExecution
+    } = bottomExecutionConfig;
+    return {
+      ...lockedExecution,
+      provider: { ...lockedProvider, selectedId: thread.providerId },
+    };
+  }, [bottomExecutionConfig, thread.providerId]);
   const inlineExecutionConfig = useMemo(() => {
     if (!inlineEditingQueuedMessage) return null;
     return {
@@ -1390,13 +1629,13 @@ export function ThreadDetailPromptArea({
         onSelectHistoryEntry: setActiveComposerDraft,
         permission: inlinePermissionConfig,
         pluginComposerHost: queuedMessagePluginComposerHost,
-        promptActions,
+        promptActions: inlinePromptActions,
         promptPlaceholder,
         submit: handleInlineComposerSubmit,
         submitMode: { kind: "ready" },
         textEffects: queuedComposerTextEffects,
         threadRuntimeDisplayStatus: runtimeDisplayStatus,
-        typeahead: typeaheadConfig,
+        typeahead: inlineTypeaheadConfig,
         collapseResetKey: `queued-message:${queuedMessageId}`,
       }),
     };
@@ -1417,7 +1656,7 @@ export function ThreadDetailPromptArea({
     isAttachingInlineFiles,
     isUpdateQueuedMessagePending,
     projectId,
-    promptActions,
+    inlinePromptActions,
     promptPlaceholder,
     queuedComposerTextEffects,
     queuedMessagePluginComposerHost,
@@ -1425,7 +1664,7 @@ export function ThreadDetailPromptArea({
     runtimeDisplayStatus,
     setActiveComposerDraft,
     thread.id,
-    typeaheadConfig,
+    inlineTypeaheadConfig,
   ]);
   usePublishPluginComposerHost(
     queuedMessageEditor
@@ -1508,7 +1747,7 @@ export function ThreadDetailPromptArea({
             sentMessageEdit.updateDraft(() => nextDraft),
           permission: bottomPermissionConfig,
           pluginComposerHost: sentMessagePluginComposerHost,
-          promptActions,
+          promptActions: inlinePromptActions,
           promptPlaceholder: "Edit message",
           submit: handleSentMessageEditSubmit,
           submitMode: sentMessageEditSubmitMode,
@@ -1516,7 +1755,7 @@ export function ThreadDetailPromptArea({
           suppressPluginComposerCustomizations: true,
           textEffects: sentMessageComposerTextEffects,
           threadRuntimeDisplayStatus: runtimeDisplayStatus,
-          typeahead: typeaheadConfig,
+          typeahead: inlineTypeaheadConfig,
           collapseResetKey: `sent-message:${operationId}`,
         })}
       </InlineMessageEditorFrame>,
@@ -1531,7 +1770,7 @@ export function ThreadDetailPromptArea({
     handleSentMessageEditSubmit,
     isAttachingSentMessageFiles,
     projectId,
-    promptActions,
+    inlinePromptActions,
     runtimeDisplayStatus,
     sentMessageAttachmentError,
     sentMessageComposerTextEffects,
@@ -1539,7 +1778,7 @@ export function ThreadDetailPromptArea({
     sentMessageEditSubmitMode,
     sentMessagePluginComposerHost,
     thread.id,
-    typeaheadConfig,
+    inlineTypeaheadConfig,
   ]);
   const childPendingInteractionBanners = useMemo(
     () =>
@@ -1735,7 +1974,7 @@ export function ThreadDetailPromptArea({
       attachments={bottomAttachmentsConfig}
       stack={pendingInteractionNode ? pendingInteractionStack : promptStack}
       pendingInteraction={pendingInteractionNode}
-      activePromptMode={activePromptMode}
+      activePromptMode={isHandoffSelection ? null : activePromptMode}
       composer={shouldHideComposer ? null : bottomComposerConfig}
       pluginComposerHost={normalPluginComposerHost}
       pluginComposerScope={normalPluginComposerHost.scope}

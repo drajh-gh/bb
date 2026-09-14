@@ -1254,7 +1254,7 @@ function stageExistingPluginSubmissionColumn(
   }
   const migration = requireExpectedAppliedMigration(
     readExpectedAppliedMigrations(migrationsFolder),
-    "0119_steep_galactus",
+    "0120_black_vance_astro",
   );
   if (readAppliedMigrationCreatedAts(db).has(migration.createdAt)) {
     return false;

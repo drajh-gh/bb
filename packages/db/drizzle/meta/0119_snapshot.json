@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3bf468aa-3c37-4777-ab51-7b884c25e2bc",
+  "id": "233bbedf-e452-4229-8b05-7b4a158ce833",
   "prevId": "9f028f13-e871-4131-bb39-5f242ffa3f92",
   "tables": {
     "app_settings": {
@@ -3023,6 +3023,88 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "provider_model_catalogs": {
+      "name": "provider_model_catalogs",
+      "columns": {
+        "host_id": {
+          "name": "host_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scope_key": {
+          "name": "scope_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "models_json": {
+          "name": "models_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "selected_only_models_json": {
+          "name": "selected_only_models_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "provider_model_catalogs_host_id_hosts_id_fk": {
+          "name": "provider_model_catalogs_host_id_hosts_id_fk",
+          "tableFrom": "provider_model_catalogs",
+          "tableTo": "hosts",
+          "columnsFrom": [
+            "host_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "provider_model_catalogs_host_id_provider_id_scope_key_pk": {
+          "columns": [
+            "host_id",
+            "provider_id",
+            "scope_key"
+          ],
+          "name": "provider_model_catalogs_host_id_provider_id_scope_key_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "queued_thread_messages": {
       "name": "queued_thread_messages",
       "columns": {
@@ -3132,13 +3214,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'inline'"
-        },
-        "plugin_submission": {
-          "name": "plugin_submission",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "retry_of_turn_request_id": {
           "name": "retry_of_turn_request_id",

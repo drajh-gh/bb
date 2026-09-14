@@ -7,7 +7,6 @@ import {
   deleteClaimedQueuedThreadMessageBatchInTransaction,
   getEnvironment,
   getThread,
-  getThreadStartupContext,
   isThreadQueueAutoSendPaused,
   listRunningThreads,
   type ClaimedQueuedThreadMessageRow,
@@ -51,6 +50,8 @@ import {
   type DispatchAttemptKind,
 } from "./dispatch-hooks.js";
 import {
+  createQueuedMessageAutoSendPausedError,
+  createQueuedMessageClaimLostError,
   recordQueuedMessageWait,
   settleQueueRowDispatched,
   type QueuedDispatchMessage,
@@ -67,7 +68,10 @@ import {
   threadForkDescriptorSchema,
   threadProvisionEnvironmentIntentSchema,
 } from "./thread-startup-store.js";
-import { readThreadProvisionContext } from "./thread-startup-store.js";
+import {
+  readThreadProvisionContext,
+  readThreadStartupContextOfKind,
+} from "./thread-startup-store.js";
 import {
   buildThreadStatusChangeMetadata,
   toThreadResponseFromThread,
@@ -100,14 +104,12 @@ export function readPendingThreadStartContext(
   deps: Pick<LoggedPendingInteractionWorkSessionDeps, "db">,
   threadId: string,
 ): PendingThreadStartContext | null {
-  const stored = getThreadStartupContext(deps.db, threadId);
-  if (stored === null) return null;
-  const value: unknown = JSON.parse(stored);
-  const header = z
-    .object({ kind: z.enum(["pending", "provisioning", "dispatched"]) })
-    .parse(value);
-  if (header.kind !== "pending") return null;
-  return pendingThreadStartContextSchema.parse(value);
+  return readThreadStartupContextOfKind(
+    deps.db,
+    threadId,
+    "pending",
+    pendingThreadStartContextSchema,
+  );
 }
 
 export function hostIdForEnvironmentIntent(
@@ -632,21 +634,13 @@ function consumeClaimedRows(
 ): SendThreadMessageTransactionPreflight {
   return ({ tx }) => {
     if (respectManualStopPause && isThreadQueueAutoSendPaused(tx, threadId)) {
-      throw new ApiError(
-        409,
-        "queued_message_auto_send_paused",
-        "Queued message auto-send was paused by a manual stop",
-      );
+      throw createQueuedMessageAutoSendPausedError();
     }
     const consumed = deleteClaimedQueuedThreadMessageBatchInTransaction(tx, {
       queuedMessages: claimed,
     });
     if (!consumed) {
-      throw new ApiError(
-        409,
-        "queued_message_claim_lost",
-        "Queued message claim expired before it could be sent",
-      );
+      throw createQueuedMessageClaimLostError();
     }
   };
 }
@@ -712,8 +706,7 @@ async function admitPendingThread(
     threadId: args.thread.id,
   });
   const claimedRow = args.claimed?.[0] ?? null;
-  let startingThread: Thread | null;
-  let provisionContext: ReturnType<typeof requestThreadProvision> | null = null;
+  let startingThread: Thread;
   try {
     startingThread = deps.db.transaction(
       (tx) => {
@@ -737,7 +730,7 @@ async function admitPendingThread(
         }
         const starting = getThread(tx, args.thread.id);
         if (starting === null) throw new PendingThreadAdmissionLost();
-        provisionContext = requestThreadProvision(deps, {
+        requestThreadProvision(deps, {
           thread: starting,
           environmentIntent: startContext.environmentIntent,
           execution,
@@ -763,9 +756,6 @@ async function admitPendingThread(
       { threadId: args.thread.id, status: args.thread.status },
       "A cleared first dispatch could not move its thread out of pending",
     );
-    return null;
-  }
-  if (!startingThread || provisionContext === null) {
     return null;
   }
   deps.hub.notifyThread(

@@ -208,8 +208,7 @@ export type ThreadStorageFilesResult = ThreadStorageFileListResponse;
 export type ThreadStorageLocationResult = ThreadStorageLocationResponse;
 export type ThreadStoragePathsResult = ThreadStoragePathListResponse;
 export type ThreadChildSummaryResult = ThreadChildSummaryResponse;
-export type ThreadDefaultExecutionOptionsResult =
-  ResolvedThreadExecutionOptions | null;
+export type ThreadDefaultExecutionOptionsResult = ResolvedThreadExecutionOptions | null;
 export type ThreadConversationOutlineResult = ThreadConversationOutlineResponse;
 export type ThreadTimelineTurnSummaryDetailsResult =
   TimelineTurnSummaryDetailsResponse;
@@ -864,6 +863,14 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
         ...signalRequestArgs(input.signal),
       ),
     );
+  const archiveAll = async (
+    input: ThreadActionArgs,
+  ): Promise<ThreadArchiveAllResult> =>
+    transport.readJson(
+      transport.api.v1.threads[":id"]["archive-all"].$post({
+        param: { id: input.threadId },
+      }),
+    );
   const events: ThreadEventsArea = {
     async list(input) {
       return transport.readJson(
@@ -1069,20 +1076,8 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
     },
   };
   return {
-    async archive(input) {
-      return transport.readJson(
-        transport.api.v1.threads[":id"]["archive-all"].$post({
-          param: { id: input.threadId },
-        }),
-      );
-    },
-    async archiveAll(input) {
-      return transport.readJson(
-        transport.api.v1.threads[":id"]["archive-all"].$post({
-          param: { id: input.threadId },
-        }),
-      );
-    },
+    archive: archiveAll,
+    archiveAll,
     async childSummary(input) {
       return transport.readJson(
         transport.api.v1.threads[":id"]["child-summary"].$get(
@@ -1192,16 +1187,22 @@ export function createThreadsArea(args: CreateSdkAreaArgs): ThreadsArea {
     },
     async markRead(input) {
       return transport.readJson(
-        transport.api.v1.threads[":id"].read.$post({
-          param: { id: input.threadId },
-        }, ...signalRequestArgs(input.signal)),
+        transport.api.v1.threads[":id"].read.$post(
+          {
+            param: { id: input.threadId },
+          },
+          ...signalRequestArgs(input.signal),
+        ),
       );
     },
     async markUnread(input) {
       return transport.readJson(
-        transport.api.v1.threads[":id"].unread.$post({
-          param: { id: input.threadId },
-        }, ...signalRequestArgs(input.signal)),
+        transport.api.v1.threads[":id"].unread.$post(
+          {
+            param: { id: input.threadId },
+          },
+          ...signalRequestArgs(input.signal),
+        ),
       );
     },
     async output(input) {
