@@ -50,7 +50,6 @@ import {
 } from "@/hooks/useTheme";
 import { useHostDaemon, useLocalHostDaemonAccess } from "@/hooks/useHostDaemon";
 import { useAppThemePreview } from "@/hooks/useAppThemePreview";
-import { UsageLimitsSettingsSection } from "@/components/settings/UsageLimitsSettingsSection";
 import { ProvidersSettingsSection } from "@/components/settings/ProvidersSettingsSection";
 import { CodeRendererSettings } from "@/components/settings/CodeRendererSettings";
 import { SidebarThreadListSetting } from "@/components/settings/SidebarThreadListSetting";
@@ -1007,6 +1006,11 @@ const EXPERIMENT_DEFINITIONS: Record<
     description:
       "Pair the bb mobile app over bb connect: shows Add mobile device under Remote access and enables bb connect machine-code.",
   },
+  multiMachinePicker: {
+    label: "Multi-machine picker",
+    description:
+      "Use searchable, target-first environment and machine pickers when many machines are available.",
+  },
   sidebarProgressiveDisclosure: {
     label: "Sidebar progressive disclosure",
     description:
@@ -1018,7 +1022,6 @@ const EXPERIMENT_DEFINITIONS: Record<
       "Mount only nearby rows in long timelines and expanded timeline details.",
   },
 };
-
 export function ExperimentsSettingsSection({
   disabled,
   experiments,
@@ -1162,8 +1165,6 @@ export function SettingsView() {
         onThemePreferenceChange={setPreferredTheme}
       />
     );
-  } else if (activeSection === "usage") {
-    content = <UsageLimitsSettingsSection />;
   } else if (activeSection === "keyboard") {
     content = <KeyboardSettingsSection />;
   } else if (activeSection === "browser") {
