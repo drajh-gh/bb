@@ -7,17 +7,21 @@ import {
   getEnvironmentDisplayIconName,
   getEnvironmentWorkspaceInfoDisplay,
   getEnvironmentWorkspaceSummaryDisplay,
-  shouldShowEnvironmentHostIdentity,
+  isHostAmbiguous,
 } from "./environment-workspace-display";
 
-describe("shouldShowEnvironmentHostIdentity", () => {
-  it("keeps the machine identity for a projectless thread with one machine", () => {
-    expect(shouldShowEnvironmentHostIdentity(false, true, "persistent")).toBe(
-      true,
-    );
-    expect(shouldShowEnvironmentHostIdentity(false, false, "persistent")).toBe(
-      false,
-    );
+describe("isHostAmbiguous", () => {
+  it("treats a lone persistent machine as unambiguous", () => {
+    expect(isHostAmbiguous(false, "persistent")).toBe(false);
+  });
+
+  it("treats more than one persistent machine as ambiguous", () => {
+    expect(isHostAmbiguous(true, "persistent")).toBe(true);
+  });
+
+  it("treats a machine that is not persistent as ambiguous", () => {
+    expect(isHostAmbiguous(false, "ephemeral")).toBe(true);
+    expect(isHostAmbiguous(false, null)).toBe(true);
   });
 });
 
@@ -120,7 +124,6 @@ interface SummaryDisplayOverrides {
   hasMultipleMachines?: boolean;
   hostName?: string | null;
   hostType?: Host["type"] | null;
-  isProjectless?: boolean;
 }
 
 function getSummaryDisplay({
@@ -130,7 +133,6 @@ function getSummaryDisplay({
   hasMultipleMachines = false,
   hostName = "Michael-M4",
   hostType = "persistent",
-  isProjectless = false,
 }: SummaryDisplayOverrides = {}) {
   return getEnvironmentWorkspaceSummaryDisplay({
     display,
@@ -139,7 +141,6 @@ function getSummaryDisplay({
     hasMultipleMachines,
     hostName,
     hostType,
-    isProjectless,
   });
 }
 
@@ -193,9 +194,6 @@ describe("getEnvironmentDisplayIconName", () => {
 
 describe("getEnvironmentWorkspaceSummaryDisplay", () => {
   it("retains the current sandbox identity when persistent machine choices are singular", () => {
-    expect(shouldShowEnvironmentHostIdentity(false, false, "ephemeral")).toBe(
-      true,
-    );
     expect(
       getSummaryDisplay({
         providerLookup: worktreeProviderLookup,
@@ -289,11 +287,17 @@ describe("getEnvironmentWorkspaceSummaryDisplay", () => {
     ).toBeNull();
   });
 
-  it("shows the machine for a single-machine projectless thread", () => {
+  it("omits the machine for a projectless thread on a lone persistent machine", () => {
+    expect(
+      getSummaryDisplay({ providerLookup: personalProviderLookup }),
+    ).toBeNull();
+  });
+
+  it("shows the machine for a projectless thread once a second machine exists", () => {
     expect(
       getSummaryDisplay({
         providerLookup: personalProviderLookup,
-        isProjectless: true,
+        hasMultipleMachines: true,
       }),
     ).toMatchObject({ label: "Michael-M4", compactLabel: "Michael-M4" });
   });

@@ -4,7 +4,6 @@ import type {
   ThreadChatMessageAction,
   ThreadChatProps,
 } from "@get-bb/plugin-sdk";
-import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import {
   formatEnvironmentDisplay,
   type EnvironmentDisplayHostContext,
@@ -208,7 +207,6 @@ function PluginThreadChatBody({
       hasMultipleMachines,
       hostName: environmentHostName,
       hostType: environmentHost?.type ?? null,
-      isProjectless: thread?.projectId === PERSONAL_PROJECT_ID,
     });
     const summaryHost =
       environmentHost !== null &&
@@ -247,7 +245,6 @@ function PluginThreadChatBody({
     hasMultipleMachines,
     isLocalDaemonHost,
     machineProviders,
-    thread?.projectId,
   ]);
 
   const isThreadMissing =

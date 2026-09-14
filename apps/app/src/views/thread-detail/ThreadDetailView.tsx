@@ -29,7 +29,6 @@ import { serializePluginPanelParams } from "@/lib/plugin-json-value";
 import { ThreadProviderContext } from "@/components/thread/thread-provider-context";
 import {
   defaultAppSettings,
-  PERSONAL_PROJECT_ID,
   resolveEnvironmentMergeBaseBranch,
   type ThreadListEntry,
   type ThreadWithRuntime,
@@ -114,7 +113,7 @@ import {
 import {
   findEnvironmentDisplayProvider,
   getEnvironmentWorkspaceSummaryDisplay,
-  shouldShowEnvironmentHostIdentity,
+  isHostAmbiguous,
 } from "@/lib/environment-workspace-display";
 import { useSystemEnvironmentProviders } from "@/hooks/queries/environment-provider-queries";
 import { useSystemMachineProviders } from "@/hooks/queries/machine-provider-queries";
@@ -949,9 +948,8 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
   }, [environment?.hostId, hostsQuery.data]);
   const hasMultipleMachines =
     selectHosts(hostsQuery.data, "persistent").length > 1;
-  const threadEnvironmentHost = shouldShowEnvironmentHostIdentity(
+  const threadEnvironmentHost = isHostAmbiguous(
     hasMultipleMachines,
-    thread?.projectId === PERSONAL_PROJECT_ID,
     resolvedThreadEnvironmentHost?.type ?? null,
   )
     ? resolvedThreadEnvironmentHost
@@ -2399,7 +2397,6 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
         hasMultipleMachines,
         hostName: resolvedThreadEnvironmentHost?.name ?? null,
         hostType: resolvedThreadEnvironmentHost?.type ?? null,
-        isProjectless: thread.projectId === PERSONAL_PROJECT_ID,
       })
     : undefined;
   const composerEnvironmentHost =

@@ -20,12 +20,11 @@ export type EnvironmentWorkspaceDisplayProviderLookup =
 export const UNNAMED_ENVIRONMENT_LABEL = "Environment";
 export const REUSE_ENVIRONMENT_ICON_NAME: IconName = "Folder02";
 
-export function shouldShowEnvironmentHostIdentity(
+export function isHostAmbiguous(
   hasMultipleMachines: boolean,
-  isProjectless: boolean,
   hostType: Host["type"] | null,
 ): boolean {
-  return hasMultipleMachines || isProjectless || hostType === "ephemeral";
+  return hasMultipleMachines || hostType !== "persistent";
 }
 
 interface EnvironmentWorkspaceLabelArgs {
@@ -38,7 +37,6 @@ interface EnvironmentWorkspaceSummaryDisplayArgs extends EnvironmentWorkspaceLab
   hostType: Host["type"] | null;
   hasMultipleMachines: boolean;
   hostName: string | null;
-  isProjectless: boolean;
 }
 
 interface EnvironmentWorkspaceSummaryDisplay {
@@ -103,13 +101,6 @@ function getEnvironmentWorkspaceLabel({
   );
 }
 
-function machineIsWorkspaceIdentity(
-  providerLookup: EnvironmentWorkspaceDisplayProviderLookup,
-): boolean {
-  if (providerLookup.status === "loading") return false;
-  return true;
-}
-
 export function getEnvironmentWorkspaceSummaryDisplay({
   display,
   providerLookup,
@@ -117,7 +108,6 @@ export function getEnvironmentWorkspaceSummaryDisplay({
   hasMultipleMachines,
   hostType,
   hostName,
-  isProjectless,
 }: EnvironmentWorkspaceSummaryDisplayArgs): EnvironmentWorkspaceSummaryDisplay | null {
   if (display.lifecycle === "provisioning") {
     return {
@@ -146,29 +136,14 @@ export function getEnvironmentWorkspaceSummaryDisplay({
   if (providerLookup.status === "loading") {
     return null;
   }
-  if (machineIsWorkspaceIdentity(providerLookup)) {
-    return shouldShowEnvironmentHostIdentity(
-      hasMultipleMachines,
-      isProjectless,
-      hostType,
-    ) && hostName !== null
-      ? {
-          label: hostName,
-          compactLabel: hostName,
-          icon: getEnvironmentLabelIconName(providerLookup),
-          typeLabel: display.typeLabel,
-        }
-      : null;
-  }
-  const providerDisplayName = getEnvironmentProviderDisplayName(providerLookup);
-  return providerDisplayName === null
-    ? null
-    : {
-        label: providerDisplayName,
-        compactLabel: providerDisplayName,
+  return isHostAmbiguous(hasMultipleMachines, hostType) && hostName !== null
+    ? {
+        label: hostName,
+        compactLabel: hostName,
         icon: getEnvironmentLabelIconName(providerLookup),
         typeLabel: display.typeLabel,
-      };
+      }
+    : null;
 }
 
 export function getEnvironmentWorkspaceInfoDisplay({
@@ -184,10 +159,7 @@ export function getEnvironmentWorkspaceInfoDisplay({
       environmentName,
     }),
     icon: getEnvironmentLabelIconName(providerLookup),
-    machineName:
-      hostName !== null && machineIsWorkspaceIdentity(providerLookup)
-        ? hostName
-        : null,
+    machineName: hostName,
   };
 }
 
