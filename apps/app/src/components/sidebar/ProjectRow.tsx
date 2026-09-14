@@ -1353,7 +1353,7 @@ export function SectionThreadDragOverlay({
       className={cn(
         SIDEBAR_ROW_BASE_CLASS,
         COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
-        "pointer-events-none bg-sidebar-accent text-sidebar-accent-foreground opacity-70 shadow-sm ring-1 ring-sidebar-border",
+        "pointer-events-none w-fit max-w-56 bg-sidebar-accent pr-2 text-sidebar-accent-foreground shadow-sm ring-1 ring-sidebar-border",
       )}
     >
       <span className="min-w-0 flex-1 truncate">

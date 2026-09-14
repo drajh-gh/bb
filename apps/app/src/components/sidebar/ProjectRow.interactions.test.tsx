@@ -149,13 +149,15 @@ describe("ProjectRow interactions", () => {
     expect(preview?.className).not.toContain("border-dashed");
   });
 
-  it("keeps the dragged copy translucent above potential targets", () => {
+  it("renders the dragged copy as a compact opaque chip", () => {
     render(<SectionThreadDragOverlay thread={makeThread()} />);
 
     const overlay = document.querySelector(
       '[data-sidebar-section-drag-overlay="true"]',
     );
-    expect(overlay?.className).toContain("opacity-70");
+    expect(overlay?.className).toContain("w-fit");
+    expect(overlay?.className).toContain("max-w-56");
+    expect(overlay?.className).not.toContain("opacity-");
   });
 
   afterEach(() => {
