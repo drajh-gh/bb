@@ -1,6 +1,7 @@
 import {
   createFakePluginHost,
   makeMessageDispatchHookContext,
+  makeQueueEntry,
 } from "@get-bb/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
 import plugin from "./server.js";
@@ -40,5 +41,22 @@ describe("draft dispatch gate", () => {
         }),
       ),
     ).toEqual({ action: "proceed" });
+  });
+
+  it("continues waiting from its queued-message wait", () => {
+    const hook = setup();
+    expect(
+      hook(
+        makeMessageDispatchHookContext({
+          queuedMessage: makeQueueEntry({
+            waitingOn: {
+              kind: "plugin",
+              pluginId: "drafts",
+              reason: "Draft",
+            },
+          }),
+        }),
+      ),
+    ).toEqual({ action: "wait", reason: "Draft" });
   });
 });

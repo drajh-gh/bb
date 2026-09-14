@@ -264,7 +264,6 @@ async function queueActiveParentSystemMessage(
         input: args.input,
         execution: args.execution,
         payload: { kind: "inline" },
-        pluginSubmission: null,
         senderThreadId: null,
         systemNotice: {
           kind: args.systemMessageKind,

@@ -1944,9 +1944,9 @@ export interface PluginComposerApi {
    *
    * `sendAt` queues the submission until that time. `experimental_data` is
    * opaque JSON delivered to dispatch hooks together with the calling plugin's
-   * id. If a hook queues the submission, bb preserves that envelope with the
-   * queued message for every later dispatch attempt. Core does not interpret
-   * the data.
+   * id on this initial attempt. Hooks run before operational core waits. If a
+   * hook queues the message, its existing plugin wait identifies the owner on
+   * later attempts; core does not persist or interpret the opaque data.
    *
    * Resolves once the host has accepted the submission and cleared the draft.
    * Rejects when the composer refused to submit — a scope with no submit
@@ -1967,8 +1967,8 @@ export interface PluginComposerApi {
  * What `experimental_submit` does differently from pressing Enter.
  *
  * `experimental_data` is opaque JSON delivered to dispatch hooks. The runtime
- * associates it with the calling plugin automatically and preserves it with
- * any queued message the submission becomes.
+ * associates it with the calling plugin automatically for the initial
+ * dispatch attempt.
  */
 export type ExperimentalComposerSubmitOptions =
   | { sendAt: number; experimental_data?: JsonValue }

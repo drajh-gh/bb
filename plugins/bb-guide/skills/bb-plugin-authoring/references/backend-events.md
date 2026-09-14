@@ -144,6 +144,12 @@ is `PluginDispatchExecutionSources`); the return value is
 `MessageDispatchHookDecision`. `PluginHooks`, `PluginHookSignatures` and
 `PluginHookHandler` type the registry itself.
 
+The hook pass runs before scheduling, thread, workspace, host, and interaction
+waits. Plugin policy therefore sees each submission before operational state
+can defer it. `experimental_submission` is present only on the initial
+composer submission; a plugin that waits can recognize later attempts through
+`ctx.queuedMessage.waitingOn.pluginId`.
+
 Decisions are `proceed`, `wait` (`reason`, optional `sendAt` epoch ms, which
 becomes the row's `sendAt` so core's due sweep re-attempts then) and `reject`
 (`message` shown to the user; the caller gets a 409 `dispatch_rejected`). A

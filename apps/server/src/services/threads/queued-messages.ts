@@ -43,7 +43,6 @@ import {
 } from "../hosts/live-command.js";
 import { isCommandTimeoutError } from "../lib/error-log-fields.js";
 import {
-  parseStoredQueuedThreadMessagePluginSubmission,
   parseStoredQueuedThreadMessageWaitingOn,
   toThreadQueuedMessage,
 } from "./thread-queued-messages.js";
@@ -703,7 +702,7 @@ async function sendClaimedQueuedMessageForThread(
       sendNow: args.sendNow,
     },
     queuePayload: queuedMessage.payload,
-    pluginSubmission: parseStoredQueuedThreadMessagePluginSubmission(lead),
+    pluginSubmission: null,
     ...(queuedMessage.payload.kind === "retry"
       ? {
           retryOf: {

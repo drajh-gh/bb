@@ -46,8 +46,8 @@ experimental_openFilePreview(options), experimental_openFileExternally(options) 
   for that surface. `experimental_submit({ sendAt })` submits through the
   composer's own pipeline at a future time. `experimental_submit({
 experimental_data })` submits now and carries plugin-owned JSON to dispatch
-  hooks; bb automatically namespaces it with the calling plugin's id and keeps
-  it on a queued row for later re-attempts.
+  hooks on the initial attempt; bb automatically namespaces it with the
+  calling plugin's id but does not persist it.
 - `useComposerView()` → reactive `{ scope, layout, draft, run }` for the
   composer instance that mounted an action or banner. `layout` is
   `"expanded" | "compact" | "zen"`; `draft` is

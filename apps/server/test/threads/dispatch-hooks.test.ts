@@ -230,6 +230,41 @@ describe("message.dispatch hook context", () => {
     });
   });
 
+  it("applies plugin policy before a future schedule", async () => {
+    await withTestHarness(async (harness) => {
+      installHooks({
+        "message.dispatch": [
+          {
+            pluginId: "drafts",
+            handler: () => ({ action: "wait", reason: "Draft" }),
+          },
+        ],
+      });
+      const { thread } = seedRunnableThread(harness, {
+        hostId: "host-plugin-before-time",
+        status: "idle",
+      });
+
+      const sendAt = Date.now() + 60_000;
+      const response = await acceptThreadSendRequest(harness.deps, {
+        payload: {
+          input: textInput("scheduled draft"),
+          mode: "auto",
+          sendAt,
+        },
+        thread,
+      });
+
+      expect(response.delivery).toBe("queued");
+      expect(onlyQueuedRow(harness, thread.id).waitingOn).toEqual({
+        kind: "plugin",
+        pluginId: "drafts",
+        reason: "Draft",
+      });
+      expect(onlyQueuedRow(harness, thread.id).sendAt).toBeNull();
+    });
+  });
+
   it("hands the hook the start intent's host before an environment exists", async () => {
     await withTestHarness(async (harness) => {
       const { host, project } = seedDispatchFixture(harness, "host-intent");
@@ -628,7 +663,7 @@ describe("dispatch hooks and the no-hook path", () => {
 });
 
 describe("message.dispatch hooks on the queue drain", () => {
-  it("preserves plugin submission data across a queued re-attempt", async () => {
+  it("uses the durable plugin wait after submission data expires", async () => {
     await withTestHarness(async (harness) => {
       const seen: unknown[] = [];
       const registry = emptyRegistry();
@@ -636,7 +671,13 @@ describe("message.dispatch hooks on the queue drain", () => {
         pluginId: "drafts",
         handler: (context) => {
           seen.push(context.experimental_submission);
-          return { action: "wait", reason: "Draft" } as const;
+          const isDraft =
+            context.experimental_submission?.pluginId === "drafts" ||
+            (context.queuedMessage?.waitingOn?.kind === "plugin" &&
+              context.queuedMessage.waitingOn.pluginId === "drafts");
+          return isDraft
+            ? ({ action: "wait", reason: "Draft" } as const)
+            : ({ action: "proceed" } as const);
         },
       });
       installHooks(registry);
@@ -661,7 +702,7 @@ describe("message.dispatch hooks on the queue drain", () => {
 
       await runQueuedMessageDispatch(harness.deps, { kind: "plugin-recheck" });
 
-      expect(seen).toEqual([pluginSubmission, pluginSubmission]);
+      expect(seen).toEqual([pluginSubmission, null]);
     });
   });
 

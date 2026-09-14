@@ -646,8 +646,8 @@ export interface MessageDispatchHookContext {
   /**
    * Opaque JSON supplied by a plugin through the composer's
    * `experimental_submit`, paired with that plugin's id. Null for ordinary
-   * submissions. Preserved when a submission is queued and delivered again
-   * on later attempts. Core does not interpret the data.
+   * submissions and queued re-attempts. Core does not persist or interpret
+   * the data.
    */
   experimental_submission: {
     pluginId: string;

@@ -2543,10 +2543,11 @@ slots need the same treatment.
 is on screen, preserving attachments, @-mentions, and the execution and
 environment choices visible in a new-thread composer. `sendAt` schedules the
 submission. `experimental_data` carries opaque JSON to every message dispatch
-hook in an `experimental_submission` envelope containing the calling plugin's
-id. Core validates JSON but does not interpret it. If a hook queues the
-message, the envelope is stored with the queued row and restored on every
-re-attempt. Backed host-side by an optional `submit` on the internal
+hook on the initial attempt in an `experimental_submission` envelope containing
+the calling plugin's id. Core validates JSON but does not persist or interpret
+it. Hooks run before operational core waits; a plugin-authored wait persists
+its owner through the queued row's existing `waitingOn` value. Backed host-side
+by an optional `submit` on the internal
 `PluginComposerHost`, supplied by the thread and new-thread composers. Rejects
 with a user-presentable message when the composer cannot submit and restores
 the draft after request failure. Consumers: `plugins/scheduled-send` and
