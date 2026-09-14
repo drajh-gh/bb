@@ -7,15 +7,16 @@ import {
   type MouseEventHandler,
 } from "react";
 import { useSetAtom } from "jotai";
-import type {
-  ClientRect,
-  Collision,
-  CollisionDetection,
-  DragEndEvent,
-  DragMoveEvent,
-  DragOverEvent,
-  DragStartEvent,
-  UniqueIdentifier,
+import {
+  MeasuringStrategy,
+  type ClientRect,
+  type Collision,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+  type UniqueIdentifier,
 } from "@dnd-kit/core";
 import type { ThreadListEntry } from "@bb/domain";
 import {
@@ -57,6 +58,10 @@ export const NEST_BAND_ARMED_FRACTION = 0.8;
 export const NEST_INDENTATION_PX = 24;
 export const NEST_CANCEL_OFFSET_PX = 12;
 export const NEST_HOVER_DELAY_MS = 350;
+
+const SECTION_THREAD_DROPPABLE_MEASURING = {
+  droppable: { strategy: MeasuringStrategy.WhileDragging, frequency: 16 },
+};
 
 function isPointerWithinSidebar(
   pointerCoordinates: { x: number; y: number } | null,
@@ -391,8 +396,7 @@ function locateThreadRowPointer(
     draggedLeft !== null && draggedLeft <= rect.left - NEST_CANCEL_OFFSET_PX;
   const movedIntoChildIndent =
     draggedLeft !== null && draggedLeft >= rect.left + NEST_INDENTATION_PX;
-  const inQuickBand =
-    Math.abs(relativeY - 0.5) <= QUICK_NEST_BAND_FRACTION / 2;
+  const inQuickBand = Math.abs(relativeY - 0.5) <= QUICK_NEST_BAND_FRACTION / 2;
   const intent = movedLeft
     ? null
     : movedIntoChildIndent && inQuickBand
@@ -810,10 +814,7 @@ export function useSectionThreadDnd({
     nestCandidateRef.current = null;
   }, []);
   const holdNestCandidate = useCallback(
-    (
-      threadId: string | null,
-      intent: NestIntent | null,
-    ): boolean => {
+    (threadId: string | null, intent: NestIntent | null): boolean => {
       const current = nestCandidateRef.current;
       if (threadId !== null && intent === "immediate") {
         if (current !== null && current.threadId === threadId) {
@@ -1276,6 +1277,7 @@ export function useSectionThreadDnd({
     useSidebarReorderDnd({
       axis: "free",
       collisionDetection,
+      measuring: SECTION_THREAD_DROPPABLE_MEASURING,
       onDragEnd: handleDragEnd,
       onDragStart: handleDragStart,
       onDragMove: handleDragMove,

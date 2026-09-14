@@ -19,6 +19,7 @@ import {
   type DragMoveEvent,
   type DragOverEvent,
   type DragStartEvent,
+  type MeasuringConfiguration,
   type Modifier,
   type Sensor,
   type TouchSensorOptions,
@@ -50,6 +51,7 @@ export interface UseReorderDndArgs {
   collisionDetection?: CollisionDetection;
   touchSensor?: Sensor<TouchSensorOptions>;
   axis?: "vertical" | "free";
+  measuring?: MeasuringConfiguration;
 }
 
 export type ReorderDndContextProps = Pick<
@@ -62,6 +64,7 @@ export type ReorderDndContextProps = Pick<
   | "onDragCancel"
   | "onDragEnd"
   | "modifiers"
+  | "measuring"
 >;
 
 export interface UseReorderDndResult {
@@ -79,6 +82,7 @@ export function useReorderDnd({
   collisionDetection = reorderCollisionDetection,
   touchSensor = TouchSensor,
   axis = "vertical",
+  measuring,
 }: UseReorderDndArgs): UseReorderDndResult {
   const {
     beginDragClickSuppression,
@@ -146,6 +150,7 @@ export function useReorderDnd({
     () => ({
       sensors,
       collisionDetection,
+      measuring,
       modifiers: axis === "vertical" ? REORDER_MODIFIERS : [],
       onDragStart: handleDragStart,
       onDragMove,
@@ -159,6 +164,7 @@ export function useReorderDnd({
       handleDragCancel,
       handleDragEnd,
       handleDragStart,
+      measuring,
       onDragMove,
       onDragOver,
       sensors,
