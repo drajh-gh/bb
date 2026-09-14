@@ -685,7 +685,41 @@ function isCoarseActivator(activatorEvent: Event | null): boolean {
 }
 
 const SECTION_AUTO_EXPAND_MS = 200;
-const DROP_SETTLE_MS = 220;
+
+function hasDropDecisionLanded(
+  lookup: SectionThreadDndLookup,
+  decision: SectionThreadDropDecision,
+): boolean {
+  switch (decision.kind) {
+    case "move":
+      return (
+        lookup.parentKeyByItemId.get(decision.activeId) === decision.toParentKey
+      );
+    case "detach":
+      return (
+        lookup.parentKeyByItemId.get(decision.activeId) ===
+          decision.toParentKey &&
+        !lookup.nestParentIdByItemId.has(decision.activeId)
+      );
+    case "nest":
+      return (
+        lookup.nestParentIdByItemId.get(decision.activeId) ===
+        decision.parentThreadId
+      );
+    case "pin":
+      return (
+        lookup.parentKeyByItemId.get(decision.activeId) ===
+        PINNED_THREAD_PARENT_KEY
+      );
+    case "unpin":
+      return (
+        lookup.parentKeyByItemId.get(decision.activeId) === decision.toParentKey
+      );
+    case "reorder-pinned":
+    case "rejected":
+      return true;
+  }
+}
 
 export function useSectionThreadDnd({
   containerId,
@@ -850,9 +884,10 @@ export function useSectionThreadDnd({
   const [rowDrop, setRowDrop] = useState<RowDropState | null>(null);
   const [reorderTarget, setReorderTarget] =
     useState<SectionThreadReorderTarget | null>(null);
+  const [pendingDropDecision, setPendingDropDecision] =
+    useState<SectionThreadDropDecision | null>(null);
   const draggingThreadRef = useRef(false);
   const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dropSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dwellTargetKeyRef = useRef<string | null>(null);
   const projectionGateRef = useRef(new SectionThreadProjectionGate());
   const stopProjectionInputTrackingRef = useRef<(() => void) | null>(null);
@@ -884,41 +919,27 @@ export function useSectionThreadDnd({
     dwellTimerRef.current = null;
     dwellTargetKeyRef.current = null;
   }, []);
-  const clearDropSettle = useCallback(() => {
-    if (dropSettleTimerRef.current !== null) {
-      clearTimeout(dropSettleTimerRef.current);
-    }
-    dropSettleTimerRef.current = null;
-  }, []);
   const clearDropState = useCallback(() => {
     setActiveThread(null);
     setDragOverParentKey(null);
     setRowDrop(null);
     setReorderTarget(null);
+    setPendingDropDecision(null);
     setReadyNestCandidate(null);
     clearNestCandidate();
     armedNestThreadIdRef.current = null;
     activeIdRef.current = null;
     pinnedInsertRef.current = null;
   }, [clearNestCandidate]);
-  const clearProjectedDrag = useCallback(() => {
-    clearDropSettle();
-    clearDropState();
-  }, [clearDropSettle, clearDropState]);
+  const clearProjectedDrag = clearDropState;
 
   useEffect(
     () => () => {
       clearDropDwell();
-      clearDropSettle();
       clearNestCandidate();
       stopProjectionInputTracking();
     },
-    [
-      clearDropDwell,
-      clearDropSettle,
-      clearNestCandidate,
-      stopProjectionInputTracking,
-    ],
+    [clearDropDwell, clearNestCandidate, stopProjectionInputTracking],
   );
 
   const handleDragStart = useCallback(
@@ -929,13 +950,13 @@ export function useSectionThreadDnd({
         ? (lookup.threadByItemId.get(activeId) ?? null)
         : null;
       draggingThreadRef.current = thread !== null;
+      setPendingDropDecision(null);
       activeIdRef.current = thread ? activeId : null;
       armedNestThreadIdRef.current = null;
       pinnedInsertRef.current = null;
       coarsePointerRef.current = isCoarseActivator(
         event.activatorEvent ?? null,
       );
-      clearDropSettle();
       clearDropDwell();
       clearNestCandidate();
       startProjectionInputTracking();
@@ -945,13 +966,7 @@ export function useSectionThreadDnd({
       setReorderTarget(null);
       setReadyNestCandidate(null);
     },
-    [
-      clearDropDwell,
-      clearDropSettle,
-      clearNestCandidate,
-      lookup,
-      startProjectionInputTracking,
-    ],
+    [clearDropDwell, clearNestCandidate, lookup, startProjectionInputTracking],
   );
 
   const projectedNestParentId =
@@ -1164,16 +1179,10 @@ export function useSectionThreadDnd({
           clearProjectedDrag();
           return;
       }
-      clearDropSettle();
-      dropSettleTimerRef.current = setTimeout(() => {
-        dropSettleTimerRef.current = null;
-        clearDropState();
-      }, DROP_SETTLE_MS);
+      setPendingDropDecision(decision);
     },
     [
       clearDropDwell,
-      clearDropSettle,
-      clearDropState,
       clearNestCandidate,
       clearProjectedDrag,
       commitNest,
@@ -1214,16 +1223,19 @@ export function useSectionThreadDnd({
     });
 
   if (!enabled) return null;
+  const dropDecisionLanded =
+    pendingDropDecision !== null &&
+    hasDropDecisionLanded(lookup, pendingDropDecision);
   return {
-    activeThread,
+    activeThread: dropDecisionLanded ? null : activeThread,
     consumeClickSuppression,
     dndContextProps,
     itemIdsByParentKey: lookup.itemIdsByParentKey,
     onClickCapture,
-    dragOverParentKey,
+    dragOverParentKey: dropDecisionLanded ? null : dragOverParentKey,
     dropPreview: null,
-    nestTarget: rowDrop,
-    reorderTarget,
+    nestTarget: dropDecisionLanded ? null : rowDrop,
+    reorderTarget: dropDecisionLanded ? null : reorderTarget,
     pinnedItemIds,
     pinnedReorderPending,
   };
