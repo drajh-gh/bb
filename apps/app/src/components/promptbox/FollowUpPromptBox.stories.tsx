@@ -1078,8 +1078,8 @@ export function Overview() {
         />
       </StoryRow>
       <StoryRow
-        label="env: remote worktree"
-        hint="remote host + worktree type stay distinguishable"
+        label="env: worktree on a sandbox"
+        hint="sandbox machine name + worktree branch stay distinguishable"
       >
         <Row
           submitMode={{ kind: "ready" }}
@@ -1096,8 +1096,8 @@ export function Overview() {
         />
       </StoryRow>
       <StoryRow
-        label="env: long local host"
-        hint="full machine name when space allows; product tooltip when constrained"
+        label="env: long machine name"
+        hint="full machine name when space allows; truncates with a title when constrained"
       >
         <Row
           submitMode={{ kind: "ready" }}
@@ -1110,7 +1110,10 @@ export function Overview() {
           environmentSummary={detachedWorktreeEnvironmentSummary}
         />
       </StoryRow>
-      <StoryRow label="env: remote direct" hint="remote label + icon">
+      <StoryRow
+        label="env: second machine"
+        hint="machine name + icon when the host is ambiguous"
+      >
         <Row
           submitMode={{ kind: "ready" }}
           environmentSummary={multiMachineEnvironmentSummary}
@@ -1150,7 +1153,7 @@ export function EnvironmentMatrix() {
     <StoryCard>
       <StoryRow
         label="provisioning"
-        hint="runtime loading icon + lifecycle label; no environment-type tooltip yet"
+        hint="runtime loading icon + lifecycle label"
       >
         <Row
           submitMode={{ kind: "queue", onStop: noop }}
@@ -1158,21 +1161,27 @@ export function EnvironmentMatrix() {
           environmentSummary={provisioningEnvironmentSummary}
         />
       </StoryRow>
-      <StoryRow label="ready · local" hint="laptop icon · Local tooltip">
+      <StoryRow
+        label="ready · one machine"
+        hint="provider name; the machine is unambiguous so it stays hidden"
+      >
         <Row
           submitMode={{ kind: "ready" }}
           environmentSummary={localEnvironmentSummary}
         />
       </StoryRow>
-      <StoryRow label="ready · remote" hint="laptop icon · Remote tooltip">
+      <StoryRow
+        label="ready · second machine"
+        hint="machine name once more than one machine exists"
+      >
         <Row
           submitMode={{ kind: "ready" }}
           environmentSummary={multiMachineEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow
-        label="ready · local worktree"
-        hint="worktree provider · provider icon · Worktree · Local tooltip"
+        label="ready · worktree, one machine"
+        hint="provider icon + provider name"
       >
         <Row
           submitMode={{ kind: "ready" }}
@@ -1180,8 +1189,8 @@ export function EnvironmentMatrix() {
         />
       </StoryRow>
       <StoryRow
-        label="ready · remote worktree"
-        hint="worktree provider · provider icon · Worktree · Remote tooltip"
+        label="ready · worktree on a sandbox"
+        hint="an ephemeral host is ambiguous, so it is named"
       >
         <Row
           submitMode={{ kind: "ready" }}
@@ -1189,8 +1198,8 @@ export function EnvironmentMatrix() {
         />
       </StoryRow>
       <StoryRow
-        label="ready · named, no provider"
-        hint="custom environment name · machine icon · Local tooltip"
+        label="ready · named environment"
+        hint="a custom name wins over both machine and provider"
       >
         <Row
           submitMode={{ kind: "ready" }}
