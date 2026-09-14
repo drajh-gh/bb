@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   Environment,
+  Host,
   PermissionMode,
   PromptMentionResource,
   PromptTextMention,
@@ -180,6 +181,7 @@ interface EnvironmentSummaryArgs {
   projectName?: string;
   machineName?: string;
   hasMultipleMachines?: boolean;
+  hostType?: Host["type"];
   branchName?: string;
   environmentCheckout?: WorkspaceCheckoutDisplay;
   onCreateNewThreadInEnvironment?: () => void;
@@ -191,6 +193,7 @@ function makeEnvironmentSummary({
   projectName,
   machineName,
   hasMultipleMachines = false,
+  hostType = "persistent",
   branchName,
   environmentCheckout,
   onCreateNewThreadInEnvironment,
@@ -210,7 +213,7 @@ function makeEnvironmentSummary({
     environmentName: environment.name,
     hasMultipleMachines,
     hostName: machineName ?? null,
-    hostType: "persistent",
+    hostType,
   });
   const checkoutDisplay =
     environmentCheckout ??
@@ -251,7 +254,6 @@ const localEnvironmentSummary: ReactNode = makeEnvironmentSummary({
     status: "ready",
   }),
   host: localEnvironmentDisplayHost,
-  machineName: "Bersabel's MacBook Pro",
   branchName: STORY_BRANCH_NAME,
 });
 
@@ -266,12 +268,13 @@ const longHostEnvironmentSummary: ReactNode = makeEnvironmentSummary({
   branchName: STORY_BRANCH_NAME,
 });
 
-const remoteEnvironmentSummary: ReactNode = makeEnvironmentSummary({
+const multiMachineEnvironmentSummary: ReactNode = makeEnvironmentSummary({
   environment: makeEnvironment({
     status: "ready",
   }),
-  host: remoteEnvironmentDisplayHost,
+  host: localEnvironmentDisplayHost,
   machineName: "Build Mac mini",
+  hasMultipleMachines: true,
   branchName: STORY_BRANCH_NAME,
 });
 
@@ -281,18 +284,18 @@ const worktreeEnvironmentSummary: ReactNode = makeEnvironmentSummary({
     status: "ready",
   }),
   host: localEnvironmentDisplayHost,
-  machineName: "Bersabel's MacBook Pro",
   branchName: STORY_BRANCH_NAME,
   onCreateNewThreadInEnvironment: noop,
 });
 
-const remoteWorktreeEnvironmentSummary: ReactNode = makeEnvironmentSummary({
+const sandboxWorktreeEnvironmentSummary: ReactNode = makeEnvironmentSummary({
   environment: makeEnvironment({
     environmentProviderId: "git-worktree",
     status: "ready",
   }),
   host: remoteEnvironmentDisplayHost,
-  machineName: "Build Mac mini",
+  machineName: "Modal sandbox",
+  hostType: "ephemeral",
   branchName: STORY_BRANCH_NAME,
   onCreateNewThreadInEnvironment: noop,
 });
@@ -304,6 +307,7 @@ const namedLocalEnvironmentSummary: ReactNode = makeEnvironmentSummary({
   }),
   host: localEnvironmentDisplayHost,
   machineName: "Bersabel's MacBook Pro",
+  hasMultipleMachines: true,
   branchName: STORY_BRANCH_NAME,
   onCreateNewThreadInEnvironment: noop,
 });
@@ -846,7 +850,7 @@ function StackedCardsWithPillsRow() {
       stack={contextBannerElement}
       queuedMessages={queuedMessages}
       contextWindowUsage={usage}
-      environmentSummary={remoteEnvironmentSummary}
+      environmentSummary={multiMachineEnvironmentSummary}
     />
   );
 }
@@ -899,7 +903,7 @@ export function Overview() {
         <Row
           submitMode={{ kind: "queue", onStop: noop }}
           threadRuntimeDisplayStatus="host-reconnecting"
-          environmentSummary={remoteEnvironmentSummary}
+          environmentSummary={multiMachineEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow
@@ -908,7 +912,7 @@ export function Overview() {
       >
         <Row
           submitMode={{ kind: "blocked", reason: "pending-interaction" }}
-          environmentSummary={remoteWorktreeEnvironmentSummary}
+          environmentSummary={sandboxWorktreeEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow
@@ -971,7 +975,7 @@ export function Overview() {
               loadError: codexModelLoadError,
             },
           }}
-          environmentSummary={remoteEnvironmentSummary}
+          environmentSummary={multiMachineEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow label="no models" hint="locked provider with empty catalog">
@@ -1001,7 +1005,7 @@ export function Overview() {
           threadRuntimeDisplayStatus="active"
           queuedMessages={queuedMessages}
           contextWindowUsage={usage}
-          environmentSummary={remoteWorktreeEnvironmentSummary}
+          environmentSummary={sandboxWorktreeEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow label="with promptbox context banner">
@@ -1025,7 +1029,7 @@ export function Overview() {
             providerId: "claude-code",
             prompt: "inspect the failing command before making changes",
           }}
-          environmentSummary={remoteEnvironmentSummary}
+          environmentSummary={multiMachineEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow
@@ -1079,7 +1083,7 @@ export function Overview() {
       >
         <Row
           submitMode={{ kind: "ready" }}
-          environmentSummary={remoteWorktreeEnvironmentSummary}
+          environmentSummary={sandboxWorktreeEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow
@@ -1109,7 +1113,7 @@ export function Overview() {
       <StoryRow label="env: remote direct" hint="remote label + icon">
         <Row
           submitMode={{ kind: "ready" }}
-          environmentSummary={remoteEnvironmentSummary}
+          environmentSummary={multiMachineEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow
@@ -1121,7 +1125,7 @@ export function Overview() {
           execution={readOnlyExecution}
           permission={readOnlyPermission}
           readOnly
-          environmentSummary={remoteEnvironmentSummary}
+          environmentSummary={multiMachineEnvironmentSummary}
         />
       </StoryRow>
     </StoryCard>
@@ -1163,7 +1167,7 @@ export function EnvironmentMatrix() {
       <StoryRow label="ready · remote" hint="laptop icon · Remote tooltip">
         <Row
           submitMode={{ kind: "ready" }}
-          environmentSummary={remoteEnvironmentSummary}
+          environmentSummary={multiMachineEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow
@@ -1181,7 +1185,7 @@ export function EnvironmentMatrix() {
       >
         <Row
           submitMode={{ kind: "ready" }}
-          environmentSummary={remoteWorktreeEnvironmentSummary}
+          environmentSummary={sandboxWorktreeEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow
