@@ -74,6 +74,8 @@ target another enrolled machine.
 | `bb tasks list`                                | Page/filter tasks by project, status, priority, label, active agents, or search text; supports `--sort`, `--limit`, and `--cursor`.        |
 | `bb tasks show <key-or-id>`                    | Show the complete task record, including comments, attachments, subtasks, and attached threads.                                            |
 | `bb tasks update <key-or-id>`                  | Update status, priority, title, description, due date, or labels.                                                                          |
+| `bb tasks archive <key-or-id>...`              | Archive Done or Canceled tasks from one project without deleting their history.                                                            |
+| `bb tasks restore <key-or-id>...`              | Restore archived terminal tasks to Recently closed without changing status.                                                                |
 | `bb tasks comment <key-or-id>`                 | Add a Markdown comment from inline text or a file; optionally notify the latest responding task agent.                                     |
 | `bb tasks attachment add\|get\|list\|remove`   | Add, fetch, list, or remove attachments. Referenced attachments require `remove --remove-references`.                                      |
 | `bb tasks preset list\|create\|update\|delete` | Manage reusable agent execution presets.                                                                                                   |
@@ -86,6 +88,14 @@ target another enrolled machine.
 
 Statuses are `backlog`, `todo`, `in_progress`, `in_review`, `done`, and
 `canceled`. Priorities are `urgent`, `high`, `medium`, `low`, and `none`.
+
+The UI opens in **Focus**, which contains Backlog, Todo, In Progress, and In
+Review. Done and Canceled tasks move to **Recently closed** and are archived
+seven days after a new terminal transition. Historical terminal tasks present
+when the archive migration is installed remain visible until explicitly
+archived. **Archive** is recoverable and retains the task key, project, status,
+comments, attachments, and attached threads. Use `bb tasks list --archived` to
+list only archived tasks or `--include-archived` to include both states.
 
 Task lists default to 100 rows and accept `--limit 1-500`. JSON output is
 `{ tasks, nextCursor, limit }`; human output prints the continuation option

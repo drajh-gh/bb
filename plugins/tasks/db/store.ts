@@ -87,6 +87,8 @@ interface TaskRow {
   position: number;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
+  closed_at: string | null;
 }
 
 interface TaskPageRow extends TaskRow {
@@ -212,6 +214,7 @@ function taskQueryFingerprint(
     priorities: normalizedFilterValues(filters.priorities),
     labelIds: normalizedFilterValues(filters.labelIds),
     activeOnly: filters.activeOnly === true,
+    archive: filters.archive ?? "active",
     parentTaskId:
       filters.parentTaskId === undefined
         ? { specified: false, value: null }
@@ -372,6 +375,8 @@ function taskFromRow(row: TaskRow): Task {
     position: row.position,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    archivedAt: row.archived_at,
+    closedAt: row.closed_at,
   };
 }
 
@@ -538,9 +543,10 @@ export function createTasksStore(db: PluginDatabase) {
     }
     if (ownId) {
       const hasChildren = db
-        .prepare<[string], { found: number }>(
-          "SELECT 1 AS found FROM folders WHERE parent_folder_id = ? LIMIT 1",
-        )
+        .prepare<
+          [string],
+          { found: number }
+        >("SELECT 1 AS found FROM folders WHERE parent_folder_id = ? LIMIT 1")
         .get(ownId);
       if (hasChildren) {
         throw new Error("A folder with children cannot be nested");
@@ -565,9 +571,10 @@ export function createTasksStore(db: PluginDatabase) {
 
   function listFolders(): Folder[] {
     return db
-      .prepare<[], FolderRow>(
-        "SELECT * FROM folders ORDER BY parent_folder_id IS NOT NULL, name COLLATE NOCASE, id",
-      )
+      .prepare<
+        [],
+        FolderRow
+      >("SELECT * FROM folders ORDER BY parent_folder_id IS NOT NULL, name COLLATE NOCASE, id")
       .all()
       .map(folderFromRow);
   }
@@ -656,23 +663,26 @@ export function createTasksStore(db: PluginDatabase) {
   function listProjects(folderId?: string | null): Project[] {
     if (folderId === undefined) {
       return db
-        .prepare<[], ProjectRow>(
-          "SELECT * FROM projects ORDER BY name COLLATE NOCASE, id",
-        )
+        .prepare<
+          [],
+          ProjectRow
+        >("SELECT * FROM projects ORDER BY name COLLATE NOCASE, id")
         .all()
         .map(projectFromRow);
     }
     const rows =
       folderId === null
         ? db
-            .prepare<[], ProjectRow>(
-              "SELECT * FROM projects WHERE folder_id IS NULL ORDER BY name COLLATE NOCASE, id",
-            )
+            .prepare<
+              [],
+              ProjectRow
+            >("SELECT * FROM projects WHERE folder_id IS NULL ORDER BY name COLLATE NOCASE, id")
             .all()
         : db
-            .prepare<[string], ProjectRow>(
-              "SELECT * FROM projects WHERE folder_id = ? ORDER BY name COLLATE NOCASE, id",
-            )
+            .prepare<
+              [string],
+              ProjectRow
+            >("SELECT * FROM projects WHERE folder_id = ? ORDER BY name COLLATE NOCASE, id")
             .all(folderId);
     return rows.map(projectFromRow);
   }
@@ -757,9 +767,10 @@ export function createTasksStore(db: PluginDatabase) {
     }
     if (ownId) {
       const hasChildren = db
-        .prepare<[string], { found: number }>(
-          "SELECT 1 AS found FROM tasks WHERE parent_task_id = ? LIMIT 1",
-        )
+        .prepare<
+          [string],
+          { found: number }
+        >("SELECT 1 AS found FROM tasks WHERE parent_task_id = ? LIMIT 1")
         .get(ownId);
       if (hasChildren) {
         throw new Error(
@@ -816,13 +827,14 @@ export function createTasksStore(db: PluginDatabase) {
           number,
           string,
           string,
+          string | null,
         ]
       >(
         `
       INSERT INTO tasks (
         id, project_id, number, title, description, status, priority, due_date,
-        parent_task_id, position, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        parent_task_id, position, created_at, updated_at, closed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       ).run(
         id,
@@ -837,6 +849,7 @@ export function createTasksStore(db: PluginDatabase) {
         position,
         createdAt,
         createdAt,
+        status === "done" || status === "canceled" ? createdAt : null,
       );
       return requireTask(id);
     },
@@ -899,6 +912,9 @@ export function createTasksStore(db: PluginDatabase) {
         WHERE tt.task_id = t.id AND tt.live_status IN ('starting', 'working')
       )`);
     }
+    const archive = filters.archive ?? "active";
+    if (archive === "active") clauses.push("t.archived_at IS NULL");
+    if (archive === "archived") clauses.push("t.archived_at IS NOT NULL");
     if (filters.parentTaskId !== undefined) {
       if (filters.parentTaskId === null) {
         clauses.push("t.parent_task_id IS NULL");
@@ -969,9 +985,10 @@ export function createTasksStore(db: PluginDatabase) {
 
     const readPage = db.transaction((): ListTasksPage => {
       const revision = db
-        .prepare<[], TaskListRevisionRow>(
-          "SELECT revision FROM task_list_revision WHERE id = 1",
-        )
+        .prepare<
+          [],
+          TaskListRevisionRow
+        >("SELECT revision FROM task_list_revision WHERE id = 1")
         .get()?.revision;
       if (revision === undefined) {
         throw new Error("Task-list revision state is unavailable");
@@ -1109,6 +1126,7 @@ export function createTasksStore(db: PluginDatabase) {
           string | null,
           string | null,
           number,
+          string | null,
           string,
           string,
         ]
@@ -1116,7 +1134,7 @@ export function createTasksStore(db: PluginDatabase) {
         `
         UPDATE tasks SET
           title = ?, description = ?, status = ?, priority = ?, due_date = ?,
-          parent_task_id = ?, position = ?, updated_at = ?
+          parent_task_id = ?, position = ?, closed_at = ?, updated_at = ?
         WHERE id = ?
       `,
       ).run(
@@ -1131,6 +1149,9 @@ export function createTasksStore(db: PluginDatabase) {
           : validateDueDate(input.dueDate),
         parentTaskId,
         position,
+        status === "done" || status === "canceled"
+          ? (current.closedAt ?? nowIso())
+          : null,
         nowIso(),
         id,
       );
@@ -1140,6 +1161,76 @@ export function createTasksStore(db: PluginDatabase) {
 
   function updateTask(id: string, input: UpdateTaskInput): Task {
     return updateTaskTransaction(id, input);
+  }
+
+  function archiveTasks(projectId: string, taskIds: readonly string[]): Task[] {
+    const archivedAt = nowIso();
+    const archive = db.transaction(() => {
+      const tasks = taskIds.map(requireTask);
+      for (const task of tasks) {
+        if (task.projectId !== projectId) {
+          throw new Error(`Task ${task.key} does not belong to this project`);
+        }
+        if (task.status !== "done" && task.status !== "canceled") {
+          throw new Error(
+            `Task ${task.key} must be Done or Canceled before archiving`,
+          );
+        }
+        if (task.archivedAt !== null) {
+          throw new Error(`Task ${task.key} is already archived`);
+        }
+      }
+      const update = db.prepare<[string, string, string]>(
+        "UPDATE tasks SET archived_at = ?, updated_at = ? WHERE id = ?",
+      );
+      for (const task of tasks) update.run(archivedAt, archivedAt, task.id);
+      return tasks.map((task) => requireTask(task.id));
+    });
+    return archive();
+  }
+
+  function restoreTasks(projectId: string, taskIds: readonly string[]): Task[] {
+    const restoredAt = nowIso();
+    const restore = db.transaction(() => {
+      const tasks = taskIds.map(requireTask);
+      for (const task of tasks) {
+        if (task.projectId !== projectId) {
+          throw new Error(`Task ${task.key} does not belong to this project`);
+        }
+        if (task.status !== "done" && task.status !== "canceled") {
+          throw new Error(`Task ${task.key} is not terminal`);
+        }
+        if (task.archivedAt === null) {
+          throw new Error(`Task ${task.key} is not archived`);
+        }
+      }
+      const update = db.prepare<[string, string, string]>(
+        "UPDATE tasks SET archived_at = NULL, closed_at = ?, updated_at = ? WHERE id = ?",
+      );
+      for (const task of tasks) update.run(restoredAt, restoredAt, task.id);
+      return tasks.map((task) => requireTask(task.id));
+    });
+    return restore();
+  }
+
+  function archiveClosedBefore(cutoff: string): Task[] {
+    const archivedAt = nowIso();
+    const candidates = db
+      .prepare<
+        [string],
+        TaskRow
+      >(`${taskSelect} WHERE t.archived_at IS NULL AND t.closed_at IS NOT NULL AND t.closed_at <= ? AND t.status IN ('done', 'canceled')`)
+      .all(cutoff);
+    if (candidates.length === 0) return [];
+    const archive = db.transaction(() => {
+      const update = db.prepare<[string, string, string]>(
+        "UPDATE tasks SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL",
+      );
+      for (const task of candidates)
+        update.run(archivedAt, archivedAt, task.id);
+      return candidates.map((task) => requireTask(task.id));
+    });
+    return archive();
   }
 
   function renormalizeColumn(
@@ -1271,9 +1362,10 @@ export function createTasksStore(db: PluginDatabase) {
 
   function listLabels(projectId: string): Label[] {
     return db
-      .prepare<[string], LabelRow>(
-        "SELECT * FROM labels WHERE project_id = ? ORDER BY name COLLATE NOCASE, id",
-      )
+      .prepare<
+        [string],
+        LabelRow
+      >("SELECT * FROM labels WHERE project_id = ? ORDER BY name COLLATE NOCASE, id")
       .all(projectId)
       .map(labelFromRow);
   }
@@ -1319,18 +1411,19 @@ export function createTasksStore(db: PluginDatabase) {
   function removeTaskLabel(taskId: string, labelId: string): boolean {
     return (
       db
-        .prepare<[string, string]>(
-          "DELETE FROM task_labels WHERE task_id = ? AND label_id = ?",
-        )
+        .prepare<
+          [string, string]
+        >("DELETE FROM task_labels WHERE task_id = ? AND label_id = ?")
         .run(taskId, labelId).changes > 0
     );
   }
 
   function listTaskLabels(taskId: string): TaskLabel[] {
     return db
-      .prepare<[string], TaskLabelRow>(
-        "SELECT task_id, label_id FROM task_labels WHERE task_id = ? ORDER BY label_id",
-      )
+      .prepare<
+        [string],
+        TaskLabelRow
+      >("SELECT task_id, label_id FROM task_labels WHERE task_id = ? ORDER BY label_id")
       .all(taskId)
       .map(taskLabelFromRow);
   }
@@ -1728,9 +1821,10 @@ export function createTasksStore(db: PluginDatabase) {
 
   function listPresets(): Preset[] {
     return db
-      .prepare<[], PresetRow>(
-        "SELECT * FROM presets ORDER BY builtin DESC, name COLLATE NOCASE, id",
-      )
+      .prepare<
+        [],
+        PresetRow
+      >("SELECT * FROM presets ORDER BY builtin DESC, name COLLATE NOCASE, id")
       .all()
       .map(presetFromRow);
   }
@@ -1819,6 +1913,9 @@ export function createTasksStore(db: PluginDatabase) {
     listTasks,
     listSubtasks,
     updateTask,
+    archiveTasks,
+    restoreTasks,
+    archiveClosedBefore,
     updatePosition,
     deleteTask,
     createLabel,

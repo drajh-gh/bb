@@ -49,9 +49,13 @@ function RouteOutlet({
 }) {
   switch (route.kind) {
     case "all":
-      return <ListView projectId={null} />;
+      return <ListView projectId={null} mode="focus" />;
     case "active":
-      return <ListView projectId={null} activeOnly />;
+      return <ListView projectId={null} mode="active" />;
+    case "recent":
+      return <ListView projectId={route.projectId} mode="recent" />;
+    case "archive":
+      return <ListView projectId={route.projectId} mode="archive" />;
     case "manage":
       return <ManagePanel />;
     case "task":
@@ -60,7 +64,7 @@ function RouteOutlet({
       return route.view === "board" && boardUsable ? (
         <BoardView projectId={route.projectId} />
       ) : (
-        <ListView projectId={route.projectId} />
+        <ListView projectId={route.projectId} mode="focus" />
       );
   }
 }
@@ -125,7 +129,12 @@ function TasksAppShellContent({ subPath }: PluginNavPanelProps) {
   }, [onTaskRoute]);
 
   const noProjects = projects.data !== undefined && projects.data.length === 0;
-  const newTaskProjectId = route.kind === "project" ? route.projectId : null;
+  const newTaskProjectId =
+    route.kind === "project" ||
+    route.kind === "recent" ||
+    route.kind === "archive"
+      ? route.projectId
+      : null;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

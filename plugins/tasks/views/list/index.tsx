@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Label } from "../../shared/contract.js";
-import { useProjects } from "../../shell/data.js";
+import { useProjects, useTasksRpc } from "../../shell/data.js";
 import { useTasksNavigation } from "../../shell/routes.js";
 import { NewTaskDialog } from "../manage/new-task-dialog.js";
 import { DetailToasts, useDetailToasts } from "../detail/toast.js";
@@ -41,7 +41,7 @@ import { TaskRow } from "./row.js";
 
 interface ListViewProps {
   projectId: string | null;
-  activeOnly?: boolean;
+  mode: "focus" | "recent" | "archive" | "active";
 }
 
 function LoadingRows() {
@@ -65,11 +65,13 @@ function LoadingRows() {
   );
 }
 
-export function ListView({ projectId, activeOnly = false }: ListViewProps) {
+export function ListView({ projectId, mode }: ListViewProps) {
   const navigation = useTasksNavigation();
+  const rpc = useTasksRpc();
+  const activeOnly = mode === "active";
   const projects = useProjects();
   const { toasts, push, dismiss } = useDetailToasts();
-  const preferenceScope = listPreferenceScope(projectId, activeOnly);
+  const preferenceScope = listPreferenceScope(projectId, activeOnly, mode);
   const [preference, setPreference] = useState<ListPreference>(() =>
     loadListPreference(preferenceScope),
   );
@@ -112,7 +114,7 @@ export function ListView({ projectId, activeOnly = false }: ListViewProps) {
     return selectedLabelIds(labelOptions, filters.labelNames);
   }, [filters.labelNames, labelOptions, labels.data]);
 
-  const tasksQuery = useListTasks(projectId, activeOnly, {
+  const tasksQuery = useListTasks(projectId, mode, {
     statuses: filters.statuses,
     priorities: filters.priorities,
     labelIds,
@@ -160,18 +162,42 @@ export function ListView({ projectId, activeOnly = false }: ListViewProps) {
     () => groupTasksByStatus(sortTasks(displayTasks ?? [], sort)),
     [displayTasks, sort],
   );
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => setSelected(new Set()), [projectId, mode]);
+  const selectable =
+    projectId !== null && (mode === "recent" || mode === "archive");
+  const mutateSelection = async () => {
+    if (projectId === null || selected.size === 0) return;
+    try {
+      const input = { projectId, taskIds: [...selected], authorName: "You" };
+      if (mode === "archive") await rpc.call("restoreTasks", input);
+      else await rpc.call("archiveTasks", input);
+      setSelected(new Set());
+      tasksQuery.refresh();
+    } catch (error) {
+      push(
+        error instanceof Error ? error.message : "Task archive action failed",
+      );
+    }
+  };
 
   const showProject = projectId === null;
   const filtered = hasActiveFilters(filters);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const scopeKey = listScrollScopeKey({ projectId, activeOnly, filters, sort });
+  const scopeKey = listScrollScopeKey({
+    projectId,
+    activeOnly,
+    mode,
+    filters,
+    sort,
+  });
   const settledScope = useRef(scopeKey);
   const scopeChanged = settledScope.current !== scopeKey;
   useEffect(() => {
     if (!tasksQuery.isLoading) settledScope.current = scopeKey;
   }, [scopeKey, tasksQuery.isLoading, tasksQuery.data]);
-  const routeScope = `${projectId ?? "-"}/${activeOnly}`;
+  const routeScope = `${projectId ?? "-"}/${mode}`;
   const [settledRouteScope, setSettledRouteScope] = useState(routeScope);
   const routeScopeChanged = settledRouteScope !== routeScope;
   const previousRouteScope = useRef(routeScope);
@@ -245,34 +271,84 @@ export function ListView({ projectId, activeOnly = false }: ListViewProps) {
       );
     }
   } else {
-    body = groups.map((group) => (
-      <section key={group.status}>
-        <div
-          data-status-group-header={group.status}
-          className="sticky top-0 z-20 isolate flex items-center gap-2 border-b border-border-hairline bg-background px-3.5 pb-1.5 pt-2.5 text-sm font-semibold"
-        >
-          <StatusIcon status={group.status} />
-          {STATUS_LABELS[group.status]}
-          <span className="text-xs font-normal tabular-nums text-subtle-foreground">
-            {group.tasks.length}
-          </span>
-        </div>
-        {group.tasks.map((task) => (
-          <TaskRow
-            key={task.id}
-            task={task}
-            meta={meta.data?.get(task.id)}
-            project={projectsById.get(task.projectId)}
-            showProject={showProject}
-            labelsById={labelsById}
-            projectLabels={labelsByProject.get(task.projectId) ?? []}
-            onEdit={edits.edit}
-            onOpen={() => navigation.go({ kind: "task", taskKey: task.key })}
-            pending={edits.pending.has(task.id)}
-          />
-        ))}
-      </section>
-    ));
+    const renderStatusGroups = (taskGroups: typeof groups) =>
+      taskGroups.map((group) => (
+        <section key={group.status}>
+          <div
+            data-status-group-header={group.status}
+            className="sticky top-0 z-20 isolate flex items-center gap-2 border-b border-border-hairline bg-background px-3.5 pb-1.5 pt-2.5 text-sm font-semibold"
+          >
+            <StatusIcon status={group.status} />
+            {STATUS_LABELS[group.status]}
+            <span className="text-xs font-normal tabular-nums text-subtle-foreground">
+              {group.tasks.length}
+            </span>
+          </div>
+          {group.tasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              meta={meta.data?.get(task.id)}
+              project={projectsById.get(task.projectId)}
+              showProject={showProject}
+              labelsById={labelsById}
+              projectLabels={labelsByProject.get(task.projectId) ?? []}
+              onEdit={edits.edit}
+              onOpen={() => navigation.go({ kind: "task", taskKey: task.key })}
+              pending={edits.pending.has(task.id)}
+              selectable={selectable}
+              selected={selected.has(task.id)}
+              onSelectedChange={(checked) =>
+                setSelected((current) => {
+                  const next = new Set(current);
+                  if (checked) next.add(task.id);
+                  else next.delete(task.id);
+                  return next;
+                })
+              }
+            />
+          ))}
+        </section>
+      ));
+    if (projectId === null && mode === "focus") {
+      const sections = (projects.data ?? []).flatMap((project) => {
+        const projectTasks = sortTasks(
+          displayTasks.filter((task) => task.projectId === project.id),
+          sort,
+        );
+        if (projectTasks.length === 0) return [];
+        return [
+          <section key={project.id} className="mb-3 border-b border-border">
+            <button
+              type="button"
+              onClick={() =>
+                navigation.go({
+                  kind: "project",
+                  projectId: project.id,
+                  view: null,
+                })
+              }
+              className="sticky top-0 z-30 flex w-full items-center gap-2 bg-sidebar px-3.5 py-2 text-left text-sm font-semibold hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              <span
+                aria-hidden
+                className="size-3 rounded-sm"
+                style={{ backgroundColor: project.color }}
+              />
+              <span className="flex-1">{project.name}</span>
+              <span className="text-xs font-normal tabular-nums text-muted-foreground">
+                {projectTasks.length} active
+              </span>
+              <Icon name="ChevronRight" className="size-3.5" />
+            </button>
+            {renderStatusGroups(groupTasksByStatus(projectTasks))}
+          </section>,
+        ];
+      });
+      body = sections;
+    } else {
+      body = renderStatusGroups(groups);
+    }
   }
 
   return (
@@ -285,6 +361,25 @@ export function ListView({ projectId, activeOnly = false }: ListViewProps) {
         labelOptions={labelOptions}
         taskCount={displayTasks?.length}
       />
+      {selectable ? (
+        <div className="flex items-center justify-between border-b border-border-hairline px-3.5 py-2 text-xs">
+          <span className="text-muted-foreground">
+            {selected.size} selected
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={selected.size === 0}
+            onClick={() => void mutateSelection()}
+          >
+            <Icon
+              name={mode === "archive" ? "RotateCcw" : "Archive"}
+              className="size-3.5"
+            />
+            {mode === "archive" ? "Restore" : "Archive completed"}
+          </Button>
+        </div>
+      ) : null}
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-y-auto @container"

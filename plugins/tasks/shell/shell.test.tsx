@@ -958,7 +958,7 @@ describe("tasks app shell", () => {
       },
     );
     await slot.findByText("Tasks Plugin");
-    expect(slot.getByRole("button", { name: /^All tasks/ })).toBeDefined();
+    expect(slot.getByRole("button", { name: /^Focus/ })).toBeDefined();
     expect(slot.getByRole("button", { name: "Manage" })).toBeDefined();
 
     fireEvent.click(slot.getByTitle("Tasks Plugin"));
@@ -1027,7 +1027,7 @@ describe("tasks app shell", () => {
         rpc: seededRpc(),
       },
     );
-    await slot.findByText("All tasks");
+    await slot.findByText("Focus");
     fireEvent.keyDown(window, { key: "c" });
     await slot.findByRole("dialog");
     fireEvent.keyDown(window, { key: "c" });
