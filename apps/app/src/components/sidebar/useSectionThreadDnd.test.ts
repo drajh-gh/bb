@@ -595,18 +595,37 @@ describe("thread row nest collisions", () => {
     });
 
     expect(collisions).toEqual([rowCollision, groupCollision]);
-    expect(intents).toEqual([
-      { threadId: "parent-a", intent: "immediate" },
+    expect(intents).toEqual([{ threadId: "parent-a", intent: "immediate" }]);
+    expect(resolve(106, NEST_BAND_FRACTION, NEST_INDENTATION_PX - 1)).toEqual([
+      groupCollision,
     ]);
-    expect(resolve(106, NEST_BAND_FRACTION, NEST_INDENTATION_PX - 1)).toEqual(
-      [groupCollision],
-    );
+  });
+
+  it("retains an armed parent through its projected child row", () => {
+    const resolveRetained = (y: number, draggedLeft: number) =>
+      resolveThreadRowNestCollisions({
+        collisions: [groupCollision],
+        draggedLeft,
+        droppableRects,
+        pointerCoordinates: { x: 20, y },
+        getBandFraction: () => NEST_BAND_ARMED_FRACTION,
+        retainedThreadId: "parent-a",
+      });
+
+    expect(resolveRetained(140, NEST_INDENTATION_PX)).toEqual([
+      rowCollision,
+      groupCollision,
+    ]);
+    expect(resolveRetained(140, -NEST_CANCEL_OFFSET_PX)).toEqual([
+      groupCollision,
+    ]);
+    expect(resolveRetained(157, NEST_INDENTATION_PX)).toEqual([groupCollision]);
   });
 
   it("cancels parenting after moving twelve pixels left", () => {
-    expect(resolve(114, NEST_BAND_ARMED_FRACTION, -NEST_CANCEL_OFFSET_PX)).toEqual(
-      [groupCollision],
-    );
+    expect(
+      resolve(114, NEST_BAND_ARMED_FRACTION, -NEST_CANCEL_OFFSET_PX),
+    ).toEqual([groupCollision]);
   });
 
   it("reports where the pointer sits on the row", () => {

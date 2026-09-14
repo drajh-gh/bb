@@ -45,6 +45,7 @@ import {
 import type { ConsumeDragClickSuppression } from "@/components/ui/use-drag-click-suppression";
 import { useNeighborReorderSortable } from "./useNeighborReorderSortable";
 import {
+  getSidebarThreadRowDroppableId,
   parseSidebarThreadRowDroppableId,
   type SidebarNestTargetState,
   type SidebarReorderPlacement,
@@ -180,6 +181,7 @@ interface ResolveThreadRowNestCollisionsArgs {
   droppableRects: ReadonlyMap<UniqueIdentifier, ClientRect>;
   pointerCoordinates: { x: number; y: number } | null;
   getBandFraction: (threadId: string) => number | null;
+  retainedThreadId?: string | null;
   onRowPointer?: (info: ThreadRowPointerInfo) => void;
   holdNestCandidate?: (
     threadId: string | null,
@@ -325,6 +327,7 @@ export function resolveThreadRowNestCollisions({
   droppableRects,
   pointerCoordinates,
   getBandFraction,
+  retainedThreadId = null,
   onRowPointer,
   holdNestCandidate = (threadId) => threadId !== null,
 }: ResolveThreadRowNestCollisionsArgs): Collision[] {
@@ -343,6 +346,11 @@ export function resolveThreadRowNestCollisions({
       rowThreadId = threadId;
     }
   }
+  const retaining = rowCollision === null && retainedThreadId !== null;
+  if (retaining) {
+    rowCollision = { id: getSidebarThreadRowDroppableId(retainedThreadId) };
+    rowThreadId = retainedThreadId;
+  }
   const rowPointer =
     rowCollision === null || rowThreadId === null
       ? null
@@ -352,6 +360,7 @@ export function resolveThreadRowNestCollisions({
           pointerCoordinates,
           getBandFraction,
           draggedLeft,
+          retaining,
         );
   const candidateThreadId = rowPointer?.intent ? rowPointer.threadId : null;
   const nesting =
@@ -375,6 +384,7 @@ function locateThreadRowPointer(
   pointerCoordinates: { x: number; y: number } | null,
   getBandFraction: (threadId: string) => number | null,
   draggedLeft: number | null,
+  retainBelow: boolean,
 ): {
   threadId: string;
   relativeY: number;
@@ -382,12 +392,11 @@ function locateThreadRowPointer(
 } | null {
   if (!rect || rect.height <= 0 || !pointerCoordinates) return null;
   const { x, y } = pointerCoordinates;
-  const withinRect =
-    x >= rect.left &&
-    x <= rect.left + rect.width &&
-    y >= rect.top &&
-    y <= rect.top + rect.height;
-  if (!withinRect) return null;
+  const withinX = x >= rect.left && x <= rect.left + rect.width;
+  const withinY = y >= rect.top && y <= rect.bottom;
+  const withinRetainedPreview =
+    retainBelow && y > rect.bottom && y <= rect.bottom + rect.height;
+  if (!withinX || (!withinY && !withinRetainedPreview)) return null;
   const relativeY = (y - rect.top) / rect.height;
   const bandFraction = getBandFraction(threadId);
   const inDwellBand =
@@ -396,6 +405,13 @@ function locateThreadRowPointer(
     draggedLeft !== null && draggedLeft <= rect.left - NEST_CANCEL_OFFSET_PX;
   const movedIntoChildIndent =
     draggedLeft !== null && draggedLeft >= rect.left + NEST_INDENTATION_PX;
+  if (withinRetainedPreview) {
+    return {
+      threadId,
+      relativeY: 1,
+      intent: movedLeft ? null : "immediate",
+    };
+  }
   const inQuickBand = Math.abs(relativeY - 0.5) <= QUICK_NEST_BAND_FRACTION / 2;
   const intent = movedLeft
     ? null
@@ -798,6 +814,7 @@ export function useSectionThreadDnd({
   );
   const activeIdRef = useRef<string | null>(null);
   const armedNestThreadIdRef = useRef<string | null>(null);
+  const retainedNestThreadIdRef = useRef<string | null>(null);
   const coarsePointerRef = useRef(false);
   const pinnedInsertRef = useRef<SectionThreadReorderTarget | null>(null);
   const nestCandidateRef = useRef<NestHoverCandidate | null>(null);
@@ -909,6 +926,7 @@ export function useSectionThreadDnd({
         droppableRects: args.droppableRects,
         pointerCoordinates: args.pointerCoordinates,
         getBandFraction: getNestBandFraction,
+        retainedThreadId: retainedNestThreadIdRef.current,
         onRowPointer: handleRowPointer,
         holdNestCandidate,
       });
@@ -989,6 +1007,7 @@ export function useSectionThreadDnd({
     setReadyNestCandidate(null);
     clearNestCandidate();
     armedNestThreadIdRef.current = null;
+    retainedNestThreadIdRef.current = null;
     activeIdRef.current = null;
     pinnedInsertRef.current = null;
   }, [clearNestCandidate]);
@@ -1014,6 +1033,7 @@ export function useSectionThreadDnd({
       setPendingDropDecision(null);
       activeIdRef.current = thread ? activeId : null;
       armedNestThreadIdRef.current = null;
+      retainedNestThreadIdRef.current = null;
       pinnedInsertRef.current = null;
       coarsePointerRef.current = isCoarseActivator(
         event.activatorEvent ?? null,
@@ -1069,6 +1089,8 @@ export function useSectionThreadDnd({
       clearDropDwell();
       dwellTargetKeyRef.current = targetKey;
       armedNestThreadIdRef.current = nextRowDrop?.threadId ?? null;
+      retainedNestThreadIdRef.current =
+        nextRowDrop?.state === "valid" ? nextRowDrop.threadId : null;
       setDragOverParentKey(targetParentKey);
       setRowDrop(nextRowDrop);
       if (isPinnedRoot(activeId)) setReorderTarget(nextReorderTarget);
