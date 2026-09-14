@@ -57,6 +57,20 @@ export const PINNED_NEST_BAND_FRACTION = 0.4;
 export const PINNED_NEST_BAND_ARMED_FRACTION = 0.5;
 export const NEST_HOVER_DELAY_MS = 700;
 
+function isPointerWithinSidebar(
+  pointerCoordinates: { x: number; y: number } | null,
+): boolean {
+  if (
+    pointerCoordinates === null ||
+    typeof document.elementsFromPoint !== "function"
+  ) {
+    return true;
+  }
+  return document
+    .elementsFromPoint(pointerCoordinates.x, pointerCoordinates.y)
+    .some((element) => element.closest('[data-sidebar="sidebar"]') !== null);
+}
+
 export interface SectionThreadNestTarget {
   threadId: string;
   state: SidebarNestTargetState;
@@ -831,6 +845,10 @@ export function useSectionThreadDnd({
   );
   const collisionDetection = useCallback<CollisionDetection>(
     (args) => {
+      if (!isPointerWithinSidebar(args.pointerCoordinates)) {
+        pinnedInsertRef.current = null;
+        return [];
+      }
       if (
         typeof args.active.id === "string" &&
         topLevelSectionIds.has(args.active.id)

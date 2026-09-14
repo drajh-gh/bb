@@ -113,6 +113,45 @@ afterEach(() => {
 });
 
 describe("useSectionThreadDnd projection feedback loop (#1830)", () => {
+  it("does not project a sidebar target while the pointer is in the main panel", () => {
+    const originalElementsFromPoint = document.elementsFromPoint;
+    const main = document.createElement("main");
+    const sidebar = document.createElement("aside");
+    const sidebarRow = document.createElement("div");
+    sidebar.dataset.sidebar = "sidebar";
+    sidebar.append(sidebarRow);
+    document.body.append(main, sidebar);
+    const elementsFromPoint = vi.fn((): Element[] => [main]);
+    document.elementsFromPoint = elementsFromPoint;
+    try {
+      const { result } = renderSectionThreadDnd();
+      const rect = {
+        top: 0,
+        left: 0,
+        width: 200,
+        height: 28,
+        right: 200,
+        bottom: 28,
+      };
+      const collide = () =>
+        result.current!.dndContextProps.collisionDetection!({
+          active: { id: "section:a" },
+          collisionRect: rect,
+          droppableRects: new Map([["section:b", rect]]),
+          droppableContainers: [{ id: "section:b" }],
+          pointerCoordinates: { x: 20, y: 14 },
+        } as unknown as Parameters<CollisionDetection>[0]);
+
+      expect(collide()).toEqual([]);
+      elementsFromPoint.mockReturnValue([sidebarRow]);
+      expect(collide().map(({ id }) => id)).toEqual(["section:b"]);
+    } finally {
+      main.remove();
+      sidebar.remove();
+      document.elementsFromPoint = originalElementsFromPoint;
+    }
+  });
+
   it("keeps the landing projection until the moved row replaces it", () => {
     const { result, rerender } = renderSectionThreadDnd();
     const props = () => result.current!.dndContextProps;

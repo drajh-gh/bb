@@ -686,7 +686,7 @@ const DraggableSectionThreadItemRow = memo(
           isActive
             ? {
                 ...style,
-                opacity: 0,
+                opacity: hasProjectedDestination ? 0 : 0.5,
                 pointerEvents: "none",
                 position: hasProjectedDestination ? "absolute" : style.position,
                 width: hasProjectedDestination ? "100%" : undefined,
