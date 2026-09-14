@@ -342,7 +342,15 @@ const detachedWorktreeEnvironmentSummary: ReactNode = makeEnvironmentSummary({
 const provisioningEnvironmentSummary: ReactNode = makeEnvironmentSummary({
   environment: makeEnvironment({
     path: null,
-    status: "ready",
+    status: "provisioning",
+  }),
+  host: localEnvironmentDisplayHost,
+});
+
+const destroyedEnvironmentSummary: ReactNode = makeEnvironmentSummary({
+  environment: makeEnvironment({
+    path: null,
+    status: "destroyed",
   }),
   host: localEnvironmentDisplayHost,
 });
@@ -1222,6 +1230,15 @@ export function EnvironmentMatrix() {
         <Row
           submitMode={{ kind: "ready" }}
           environmentSummary={detachedWorktreeEnvironmentSummary}
+        />
+      </StoryRow>
+      <StoryRow
+        label="destroyed environment"
+        hint="lifecycle label replaces the provider name"
+      >
+        <Row
+          submitMode={{ kind: "ready" }}
+          environmentSummary={destroyedEnvironmentSummary}
         />
       </StoryRow>
       <StoryRow
