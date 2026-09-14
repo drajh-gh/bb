@@ -1214,6 +1214,7 @@ export function useSectionThreadDnd({
 
   const { consumeClickSuppression, dndContextProps, onClickCapture } =
     useSidebarReorderDnd({
+      axis: "free",
       collisionDetection,
       onDragEnd: handleDragEnd,
       onDragStart: handleDragStart,

@@ -14,6 +14,9 @@ export interface SplitDragFallbackTarget {
 
 export interface SplitDragConfig {
   ghostLabel: string;
+  ghostClassName?: string;
+  ghostOffset?: { x: number; y: number };
+  ghostStyle?: Partial<CSSStyleDeclaration>;
   sourceEl?: HTMLElement | null;
   decide: (paneId: string, zone: SplitZone) => ZoneDecision | null;
   onDrop: (target: SplitDropTarget) => void;
@@ -52,7 +55,11 @@ export function beginSplitDrag(config: SplitDragConfig): void {
         }),
       );
     }
-    ghostEl = createGhost(config.ghostLabel);
+    ghostEl = createGhost(
+      config.ghostLabel,
+      config.ghostClassName,
+      config.ghostStyle,
+    );
     overlayEl = createOverlay();
     document.body.append(ghostEl, overlayEl);
     document.body.style.cursor = "grabbing";
@@ -104,8 +111,9 @@ export function beginSplitDrag(config: SplitDragConfig): void {
     }
     event.preventDefault();
     if (ghostEl) {
-      ghostEl.style.left = `${event.clientX + 12}px`;
-      ghostEl.style.top = `${event.clientY + 8}px`;
+      const ghostOffset = config.ghostOffset ?? { x: 12, y: 8 };
+      ghostEl.style.left = `${event.clientX + ghostOffset.x}px`;
+      ghostEl.style.top = `${event.clientY + ghostOffset.y}px`;
     }
 
     target = null;
@@ -196,27 +204,41 @@ function paneElementAt(clientX: number, clientY: number): HTMLElement | null {
   return null;
 }
 
-function createGhost(label: string): HTMLElement {
+function createGhost(
+  label: string,
+  className?: string,
+  style?: Partial<CSSStyleDeclaration>,
+): HTMLElement {
   const ghost = document.createElement("div");
   ghost.textContent = label;
+  ghost.dataset.splitDragGhost = "";
+  if (className) {
+    ghost.className = className;
+  }
   Object.assign(ghost.style, {
     position: "fixed",
     zIndex: "100",
     pointerEvents: "none",
     left: "-9999px",
     top: "-9999px",
-    maxWidth: "260px",
-    padding: "6px 12px",
-    borderRadius: "10px",
-    fontSize: "12.5px",
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
-    background: "var(--popover)",
-    color: "var(--popover-foreground)",
-    border: "1px solid var(--border)",
-    boxShadow: "0 6px 20px color-mix(in oklab, var(--ink) 22%, transparent)",
+    ...(className
+      ? {}
+      : {
+          maxWidth: "260px",
+          padding: "6px 12px",
+          borderRadius: "10px",
+          fontSize: "12.5px",
+          background: "var(--popover)",
+          color: "var(--popover-foreground)",
+          border: "1px solid var(--border)",
+          boxShadow:
+            "0 6px 20px color-mix(in oklab, var(--ink) 22%, transparent)",
+        }),
   } satisfies Partial<CSSStyleDeclaration>);
+  Object.assign(ghost.style, style);
   return ghost;
 }
 

@@ -49,6 +49,7 @@ export interface UseReorderDndArgs {
   onDragCancel?: () => void;
   collisionDetection?: CollisionDetection;
   touchSensor?: Sensor<TouchSensorOptions>;
+  axis?: "vertical" | "free";
 }
 
 export type ReorderDndContextProps = Pick<
@@ -77,6 +78,7 @@ export function useReorderDnd({
   onDragCancel,
   collisionDetection = reorderCollisionDetection,
   touchSensor = TouchSensor,
+  axis = "vertical",
 }: UseReorderDndArgs): UseReorderDndResult {
   const {
     beginDragClickSuppression,
@@ -144,7 +146,7 @@ export function useReorderDnd({
     () => ({
       sensors,
       collisionDetection,
-      modifiers: REORDER_MODIFIERS,
+      modifiers: axis === "vertical" ? REORDER_MODIFIERS : [],
       onDragStart: handleDragStart,
       onDragMove,
       onDragOver,
@@ -152,6 +154,7 @@ export function useReorderDnd({
       onDragEnd: handleDragEnd,
     }),
     [
+      axis,
       collisionDetection,
       handleDragCancel,
       handleDragEnd,

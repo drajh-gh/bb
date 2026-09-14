@@ -31,6 +31,10 @@ import {
   shouldEngageSidebarSplitDrag,
   type SplitDragFallbackTarget,
 } from "@/lib/split-drag";
+import {
+  SIDEBAR_THREAD_DRAG_CHIP_CLASS,
+  SIDEBAR_THREAD_DRAG_CHIP_STYLE,
+} from "./sidebarThreadDragChip";
 
 const SIDEBAR_SELECTOR = '[data-sidebar="sidebar"]';
 const MAIN_CONTENT_SELECTOR = "main";
@@ -142,10 +146,17 @@ export function beginSidebarPaneContentSplitDrag({
   const sidebarRightEdge = (sidebarEl ?? rowEl).getBoundingClientRect().right;
   const startX = event.clientX;
   const startY = event.clientY;
+  const rowRect = rowEl.getBoundingClientRect();
   const startLayout = store.get(splitLayoutAtom);
   const fallback = singlePaneFallback(startLayout);
   beginSplitDrag({
     ghostLabel: label,
+    ghostClassName: SIDEBAR_THREAD_DRAG_CHIP_CLASS,
+    ghostStyle: SIDEBAR_THREAD_DRAG_CHIP_STYLE,
+    ghostOffset: {
+      x: rowRect.left - startX,
+      y: rowRect.top - startY,
+    },
     sourceEl: rowEl,
     cancelSidebarReorderOnEngage: true,
     ...(fallback ? { fallback } : {}),

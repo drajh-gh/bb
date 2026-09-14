@@ -126,6 +126,26 @@ describe("beginSplitDrag — sidebar gesture arbitration and fallback", () => {
     expect(onEnd).toHaveBeenCalledWith({ dropped: true });
   });
 
+  it("uses the supplied chip appearance and preserves its pointer offset", () => {
+    const config = baseConfig({
+      ghostClassName: "sidebar-thread-drag-chip",
+      ghostOffset: { x: -40, y: -10 },
+      ghostStyle: { paddingLeft: "8px" },
+    });
+    beginSplitDrag(config);
+
+    fireWindowPointer("pointermove", 900, 400);
+
+    const ghost = document.querySelector<HTMLElement>("[data-split-drag-ghost]");
+    expect(ghost?.className).toBe("sidebar-thread-drag-chip");
+    expect(ghost?.style.left).toBe("860px");
+    expect(ghost?.style.top).toBe("390px");
+    expect(ghost?.style.paddingLeft).toBe("8px");
+
+    fireWindowPointer("pointercancel", 900, 400);
+    expect(document.querySelector("[data-split-drag-ghost]")).toBeNull();
+  });
+
   it("a vertical in-sidebar drag never engages: reorder is untouched, no drop", () => {
     const config = baseConfig();
     beginSplitDrag(config);

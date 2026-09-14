@@ -161,6 +161,10 @@ import {
   type BuiltInSidebarSectionOptionsById,
 } from "./BuiltInSidebarSection";
 import { SectionThreadDndProvider } from "./SectionThreadDndContext";
+import {
+  SIDEBAR_THREAD_DRAG_CHIP_CLASS,
+  SIDEBAR_THREAD_DRAG_CHIP_STYLE,
+} from "./sidebarThreadDragChip";
 
 const SIDEBAR_STICKY_PARENT_DEPTH_CAP = 4;
 
@@ -1349,12 +1353,8 @@ export function SectionThreadDragOverlay({
     <div
       aria-hidden="true"
       data-sidebar-section-drag-overlay="true"
-      style={{ paddingLeft: getSidebarThreadRowPaddingLeft(0) }}
-      className={cn(
-        SIDEBAR_ROW_BASE_CLASS,
-        COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
-        "pointer-events-none w-fit max-w-56 bg-sidebar-accent pr-2 text-sidebar-accent-foreground shadow-sm ring-1 ring-sidebar-border",
-      )}
+      style={SIDEBAR_THREAD_DRAG_CHIP_STYLE}
+      className={SIDEBAR_THREAD_DRAG_CHIP_CLASS}
     >
       <span className="min-w-0 flex-1 truncate">
         {getThreadDisplayTitle(thread)}
