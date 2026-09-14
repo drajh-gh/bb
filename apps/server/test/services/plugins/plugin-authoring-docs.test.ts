@@ -281,6 +281,7 @@ const _assertAllSlotsListed: MissingSlot extends never ? true : never = true;
 void _assertAllSlotsListed;
 
 const APP_BUILDER_FIELDS = [
+  "commands",
   "experimental_icons",
   "slots",
   "composer",
@@ -468,6 +469,7 @@ const _assertAllMessageActionRegistrationFieldsListed: MissingMessageActionRegis
 void _assertAllMessageActionRegistrationFieldsListed;
 
 const COMMAND_PALETTE_ACTION_REGISTRATION_FIELDS = [
+  "defaultShortcut",
   "id",
   "title",
   "isAvailable",

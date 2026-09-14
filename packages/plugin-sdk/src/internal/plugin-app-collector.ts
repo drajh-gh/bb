@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type {
   ComposerCustomization,
   ExperimentalAppOverlayRegistration,
@@ -14,7 +15,7 @@ import type {
   PluginMachineProviderInputsRegistration,
   PluginFileOpenerRegistration,
   PluginHomepageSectionRegistration,
-  PluginCommandPaletteActionRegistration,
+  PluginCommandRegistration,
   PluginMessageActionRegistration,
   PluginMessageDirectiveRegistration,
   PluginNavPanelRegistration,
@@ -291,6 +292,48 @@ export type CollectedPluginProviderIconRegistration = Omit<
 };
 
 /** Validated registrations produced by one plugin app setup execution. */
+const commandShortcutSchema = z
+  .object({
+    key: z
+      .string()
+      .min(1)
+      .max(32)
+      .refine(
+        (key) =>
+          ![
+            "Alt",
+            "Control",
+            "Meta",
+            "OS",
+            "Shift",
+            "Dead",
+            "Unidentified",
+          ].includes(key),
+      ),
+    mod: z.boolean().default(false),
+    meta: z.boolean().default(false),
+    control: z.boolean().default(false),
+    alt: z.boolean().default(false),
+    shift: z.boolean().default(false),
+  })
+  .strict()
+  .refine(
+    (shortcut) =>
+      shortcut.mod ||
+      shortcut.meta ||
+      shortcut.control ||
+      shortcut.alt ||
+      /^F(?:[1-9]|1[0-9]|2[0-4])$/u.test(shortcut.key),
+    "Use Command, Control, or Alt with a key, or a function key",
+  );
+
+export interface CollectedPluginCommandRegistration extends Omit<
+  PluginCommandRegistration,
+  "defaultShortcut"
+> {
+  defaultShortcut: z.infer<typeof commandShortcutSchema> | null;
+}
+
 export interface CollectedPluginAppRegistrations {
   homepageSections: PluginHomepageSectionRegistration[];
   settingsSections: PluginSettingsSectionRegistration[];
@@ -310,7 +353,7 @@ export interface CollectedPluginAppRegistrations {
   diffRenderers: PluginDiffRendererRegistration[];
   messageDirectives: PluginMessageDirectiveRegistration[];
   messageActions: PluginMessageActionRegistration[];
-  commandPaletteActions: PluginCommandPaletteActionRegistration[];
+  commandPaletteActions: CollectedPluginCommandRegistration[];
   providerIcons: CollectedPluginProviderIconRegistration[];
   icons: ExperimentalIconRegistration[];
   timelineRenderers: PluginTimelineRendererRegistration[];
@@ -461,7 +504,7 @@ export function collectPluginAppRegistrations(
     diffRenderer: new Set<string>(),
     messageDirective: new Set<string>(),
     messageAction: new Set<string>(),
-    commandPaletteAction: new Set<string>(),
+    command: new Set<string>(),
     providerIcon: new Set<string>(),
     timelineRenderer: new Set<string>(),
     environmentProviderInputs: new Set<string>(),
@@ -469,7 +512,35 @@ export function collectPluginAppRegistrations(
     contentScript: new Set<string>(),
   };
 
+  function registerCommand(registration: PluginCommandRegistration): void {
+    const kind = "commands.register";
+    const id = requireSlotId(kind, registration?.id);
+    requireUniqueId(kind, seenIds.command, id);
+    if (typeof registration.run !== "function") {
+      throw new Error(`${kind}: "run" must be a function`);
+    }
+    if (
+      registration.isAvailable !== undefined &&
+      typeof registration.isAvailable !== "function"
+    ) {
+      throw new Error(`${kind}: "isAvailable" must be a function`);
+    }
+    collected.commandPaletteActions.push({
+      id,
+      defaultShortcut:
+        registration.defaultShortcut === undefined
+          ? null
+          : commandShortcutSchema.parse(registration.defaultShortcut),
+      title: requireNonEmptyString(kind, "title", registration.title),
+      ...(registration.isAvailable !== undefined
+        ? { isAvailable: registration.isAvailable }
+        : {}),
+      run: registration.run,
+    });
+  }
+
   definition.setup({
+    commands: { register: registerCommand },
     slots: {
       homepageSection(registration) {
         const kind = "slots.homepageSection";
@@ -760,26 +831,7 @@ export function collectPluginAppRegistrations(
         });
       },
       commandPaletteAction(registration) {
-        const kind = "slots.commandPaletteAction";
-        const id = requireSlotId(kind, registration?.id);
-        requireUniqueId(kind, seenIds.commandPaletteAction, id);
-        if (typeof registration.run !== "function") {
-          throw new Error(`${kind}: "run" must be a function`);
-        }
-        if (
-          registration.isAvailable !== undefined &&
-          typeof registration.isAvailable !== "function"
-        ) {
-          throw new Error(`${kind}: "isAvailable" must be a function`);
-        }
-        collected.commandPaletteActions.push({
-          id,
-          title: requireNonEmptyString(kind, "title", registration.title),
-          ...(registration.isAvailable !== undefined
-            ? { isAvailable: registration.isAvailable }
-            : {}),
-          run: registration.run,
-        });
+        registerCommand(registration);
       },
       experimental_providerIcon(registration) {
         const kind = "slots.experimental_providerIcon";

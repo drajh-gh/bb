@@ -1,17 +1,18 @@
 ---
 kind: instruction
 title: bb Guide — Customization
-summary: Command reference for customizing the bb app color palette, keyboard shortcuts, and mobile push notifications.
+summary: Command reference for customizing the bb app color palette, typography, keyboard shortcuts, and mobile push notifications.
 intent: Explain the CLI theme surface, server-backed app customization, and push-notification device registration.
 editingNotes: Keep flags accurate against the CLI implementation. Theme details live in the bb-cli skill's references/theming.md.
 ---
 Customization commands
 
-Theming — the app-wide color palette
+Theming — the app-wide palette and typography
 
-`bb theme` controls a set of CSS-variable overrides, persisted server-side and
-applied live to every open window. This is the palette only; light/dark mode is a
-separate per-client setting the palette layers on top of. Custom themes live on
+`bb theme` controls a set of CSS-variable overrides for the app palette and
+typography, persisted server-side and applied live to every open window.
+Light/dark mode is a separate per-client setting the theme layers on top of.
+Custom themes live on
 disk, one folder per theme, at <bb-data-dir>/theme/<name>/theme.css (the packaged
 app uses ~/.bb/theme/…). The folder name is the theme id.
 
@@ -31,6 +32,10 @@ then `bb theme set <name>`. Optional `pierre-dark.json` / `pierre-light.json`
 (or a `theme.json` `codeTheme` field) ship the matching code colors. Built-in
 palettes use the matching Shiki pair. The full design-token reference is in
 the bb-cli skill (references/theming.md).
+
+Theme CSS can override typography as well as colors. `--font-terminal` controls
+the integrated terminal's font family independently of `--font-mono`; set it in
+the theme's `:root, .light` block and end the stack with a generic fallback.
 
 Favicon colors are `default`, `red`, `orange`, `yellow`, `green`, `teal`,
 `blue`, `purple`, and `pink`. Theme and favicon-only commands carry the other
@@ -182,6 +187,20 @@ same resolved bindings. The complete default table is in docs/configuration.md.
   bb settings keyboard hints <true|false>
   bb settings keyboard set <command> <shortcut|disabled>
   bb settings keyboard reset [command]
+
+Plugin commands use `plugin:<plugin-id>/<command-id>` as their stable binding
+ID. For example: `bb settings keyboard set plugin:example/open-issue Mod+Shift+I`.
+`bb settings keyboard reset plugin:example/open-issue` restores the plugin's
+default; `set ... disabled` explicitly unbinds it. The SDK supports the same IDs
+through `system.updateKeyboardSettings` and `system.config`.
+Overrides survive plugin disable/re-enable and reload. Every active plugin
+command appears in Keyboard Settings; commands without defaults start unbound.
+Conflicting plugin defaults stay unbound and display the conflicting command.
+The UI offers Replace binding or Cancel when assigning an occupied shortcut.
+`keyboard list` includes all saved overrides and core effective bindings;
+plugin defaults and availability are resolved in each app window, where the
+plugin frontend runs. CLI/SDK callers should clear conflicting explicit
+bindings in the same update; plugin defaults yield to explicit bindings.
 
 Push notifications
 

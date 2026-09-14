@@ -280,6 +280,24 @@ newline and the submit button sends.
 iPadOS WebKit additionally preserves the Enter and Command+Enter shortcuts
 above for a connected Magic Keyboard.
 
+## Themes
+
+`bb theme` controls CSS-variable overrides for the app palette and typography.
+Custom themes live at `<bb-data-dir>/theme/<name>/theme.css`; use `bb theme dir`
+to find the directory and `bb theme show [id] --css` to inspect resolved CSS.
+
+The typography tokens are mode-independent and belong in the `:root, .light`
+block:
+
+- `--font-sans` controls app UI and body text.
+- `--font-mono` controls code blocks, diffs, file paths, and previews.
+- `--font-serif` controls serif prose.
+- `--font-terminal` controls the integrated terminal's font family.
+
+Always end font stacks with a generic fallback such as `sans-serif` or
+`monospace`. The complete theme token reference is in the bb-cli skill's
+`references/theming.md`.
+
 ## Keyboard Shortcuts
 
 `Mod+Shift+P` opens the quick palette: type to filter, then run a command with
@@ -303,6 +321,21 @@ pane shortcuts follow Slack's browser-safe convention: web uses
 uses `Mod+1…9`. The web aliases leave native browser `Mod+1…9` tab switching
 untouched. Previous and next thread use `Mod+Shift+[/]` on desktop and
 `Control+Shift+[/]` on the web.
+
+
+Plugin commands use `plugin:<plugin-id>/<command-id>` as their stable binding
+ID. For example: `bb settings keyboard set plugin:example/open-issue Mod+Shift+I`.
+`bb settings keyboard reset plugin:example/open-issue` restores the plugin's
+default; `set ... disabled` explicitly unbinds it. The SDK supports the same IDs
+through `system.updateKeyboardSettings` and `system.config`.
+Overrides survive plugin disable/re-enable and reload. Every active plugin
+command appears in Keyboard Settings; commands without defaults start unbound.
+Conflicting plugin defaults stay unbound and display the conflicting command.
+The UI offers Replace binding or Cancel when assigning an occupied shortcut.
+`keyboard list` includes all saved overrides and core effective bindings;
+plugin defaults and availability are resolved in each app window, where the
+plugin frontend runs. CLI/SDK callers should clear conflicting explicit
+bindings in the same update; plugin defaults yield to explicit bindings.
 
 The "Show keyboard hints when holding CMD / Control" preference defaults
 to on. Set it with

@@ -1,5 +1,30 @@
 # APIs To Audit
 
+## `app.commands.register`
+
+`app.commands.register` requires SDK 0.4.91; `defaultShortcut` and keyboard
+bindings require SDK 0.4.92.
+
+Registers frontend commands with `{ id, title, defaultShortcut?, isAvailable?, run }`. The command
+palette consumes the same registrations as the deprecated
+`app.slots.commandPaletteAction` alias. Both paths share validation and a
+per-plugin ID namespace. The public name follows the explicitly requested API
+spelling without an experimental prefix. Existing context and registration
+type names remain deprecated aliases of `PluginCommandContext` and
+`PluginCommandRegistration`.
+
+Audit command identity, availability outside the palette, shortcut conflicts,
+and saved binding lifecycle before stabilizing the keyboard shortcut contract.
+`defaultShortcut` uses a key and optional boolean modifiers, normalized when
+registered. The palette and keyboard path share availability and invocation.
+Every command is rebindable under `plugin:<plugin-id>/<command-id>` through
+Keyboard Settings or the existing keyboard settings SDK/CLI. Overrides persist
+while plugins are inactive; inactive commands never handle keyboard events.
+Conflicting plugin defaults are suppressed without load-order arbitration;
+manual reassignment asks to replace the current binding or cancel. Audit
+cross-platform conflicts and plugin lifecycle before extending the context
+model or default binding policy.
+
 ## Discoverable RPC
 
 `bb.rpc.register` accepts optional `experimental_discoverable` and `experimental_description` options. Method definitions accept `experimental_description`. Discoverable registration exports wire schemas through Standard JSON Schema; validation-only schemas remain usable without publication. Descriptions are published separately and absent descriptions become null. Discovery advertises methods without changing RPC authorization or dispatch.
