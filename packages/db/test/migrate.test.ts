@@ -11,7 +11,7 @@ import {
   createProject,
   getAppKeybindingOverrides,
   getAppSettings,
-  migrate,
+  migrate as migrateDatabase,
   noopNotifier,
   upsertHost,
   type DbConnection,
@@ -21,6 +21,47 @@ import {
   createMigratedConnection,
   prepareMigratedConnectionTemplate,
 } from "./helpers/migrated-connection.js";
+
+const pluginSubmissionMigrationWhen = 1789354063050;
+
+function migrate(
+  db: DbConnection,
+  options?: Parameters<typeof migrateDatabase>[1],
+): void {
+  const hasQueuedMessages = db.$client
+    .prepare<[], { present: number }>(
+      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'queued_thread_messages'",
+    )
+    .get();
+  const hasMigrationLedger = db.$client
+    .prepare<[], { present: number }>(
+      "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = '__drizzle_migrations'",
+    )
+    .get();
+  const pluginSubmissionApplied = hasMigrationLedger
+    ? db.$client
+        .prepare<[number], { present: number }>(
+          "SELECT 1 AS present FROM __drizzle_migrations WHERE created_at = ?",
+        )
+        .get(pluginSubmissionMigrationWhen)
+    : undefined;
+  const hasPluginSubmission = hasQueuedMessages
+    ? db.$client
+        .prepare<[], { name: string }>(
+          "PRAGMA table_info(queued_thread_messages)",
+        )
+        .all()
+        .some((column) => column.name === "plugin_submission")
+    : false;
+  if (hasPluginSubmission && !pluginSubmissionApplied) {
+    db.$client
+      .prepare(
+        "ALTER TABLE queued_thread_messages DROP COLUMN plugin_submission",
+      )
+      .run();
+  }
+  migrateDatabase(db, options);
+}
 
 type InsertMigrationParameters = [string, number];
 type DeleteMigrationParameters = [number];
