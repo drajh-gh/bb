@@ -16,10 +16,12 @@ import {
   useState,
   type CSSProperties,
   type MouseEventHandler,
+  type PointerEventHandler,
   type ReactNode,
 } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { DndContext, DragOverlay, useDroppable } from "@dnd-kit/core";
+import { useComposedRefs } from "@radix-ui/react-compose-refs";
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -257,6 +259,8 @@ interface ChronologicalSectionThreadSectionsProps extends SectionThreadTreeProps
 type ProjectThreadTreeVariant = "project" | "section";
 
 type ProjectThreadListClickCaptureHandler = MouseEventHandler<HTMLDivElement>;
+type ProjectThreadListPointerDownCaptureHandler =
+  PointerEventHandler<HTMLDivElement>;
 
 const EMPTY_PROJECT_THREADS: ThreadListEntry[] = [];
 const EMPTY_PINNED_ROOT_NODES: readonly ProjectThreadNode[] = [];
@@ -266,6 +270,7 @@ interface ProjectThreadTreeGroupProps {
   children: ReactNode;
   variant: ProjectThreadTreeVariant;
   onClickCapture?: ProjectThreadListClickCaptureHandler;
+  onPointerDownCapture?: ProjectThreadListPointerDownCaptureHandler;
 }
 
 interface ThreadTreeNodeRowProps {
@@ -588,6 +593,7 @@ function ProjectThreadTreeGroup({
   children,
   variant,
   onClickCapture,
+  onPointerDownCapture,
 }: ProjectThreadTreeGroupProps) {
   return (
     <div
@@ -597,6 +603,7 @@ function ProjectThreadTreeGroup({
         getProjectThreadTreeGroupLineClassName(variant),
       )}
       onClickCapture={onClickCapture}
+      onPointerDownCapture={onPointerDownCapture}
     >
       {children}
     </div>
@@ -1612,6 +1619,10 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
     disabled: !nestDropEnabled,
     resizeObserverConfig: { disabled: !nestDropEnabled },
   });
+  const rowNodeRef = useComposedRefs<HTMLDivElement>(
+    setNestDropNodeRef,
+    sortableRef,
+  );
   const nestTargetState =
     sectionDnd?.nestTarget?.threadId === node.thread.id
       ? sectionDnd.nestTarget.state
@@ -1632,12 +1643,12 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
     () =>
       nestDropEnabled
         ? {
-            setNodeRef: setNestDropNodeRef,
+            setNodeRef: rowNodeRef,
             state: nestTargetState,
             reorderPlacement,
           }
         : undefined,
-    [nestDropEnabled, nestTargetState, reorderPlacement, setNestDropNodeRef],
+    [nestDropEnabled, nestTargetState, reorderPlacement, rowNodeRef],
   );
   const parentRowDepth = getThreadRowDepth({
     depthOffset,
@@ -1709,11 +1720,7 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
   }
 
   return (
-    <SidebarStickyGroup
-      ref={sortableRef}
-      style={sortableStyle}
-      className="space-y-0.5"
-    >
+    <SidebarStickyGroup style={sortableStyle} className="space-y-0.5">
       {row}
       {showChildren || showNestPreview ? (
         <div className="relative space-y-px">
@@ -1928,6 +1935,7 @@ function SectionThreadTreeItems({
     <ProjectThreadTreeGroup
       variant={variant}
       onClickCapture={sectionDnd?.onClickCapture}
+      onPointerDownCapture={sectionDnd?.onPointerDownCapture}
     >
       {sortableParentKey !== undefined ? (
         <SectionDndSortableList

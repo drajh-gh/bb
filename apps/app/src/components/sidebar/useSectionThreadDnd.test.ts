@@ -602,13 +602,18 @@ describe("thread row nest collisions", () => {
   });
 
   it("retains an armed parent through its projected child row", () => {
-    const resolveRetained = (y: number, draggedLeft: number) =>
+    const resolveRetained = (
+      y: number,
+      draggedLeft: number,
+      retainedRect?: typeof rect,
+    ) =>
       resolveThreadRowNestCollisions({
         collisions: [groupCollision],
         draggedLeft,
         droppableRects,
         pointerCoordinates: { x: 20, y },
         getBandFraction: () => NEST_BAND_ARMED_FRACTION,
+        retainedRect,
         retainedThreadId: "parent-a",
       });
 
@@ -620,6 +625,31 @@ describe("thread row nest collisions", () => {
       groupCollision,
     ]);
     expect(resolveRetained(157, NEST_INDENTATION_PX)).toEqual([groupCollision]);
+    expect(
+      resolveRetained(170, NEST_INDENTATION_PX, {
+        ...rect,
+        top: 158,
+        bottom: 186,
+      }),
+    ).toEqual([rowCollision, groupCollision]);
+  });
+
+  it("uses the initial row position after a source subtree collapses", () => {
+    const shiftedRect = {
+      ...rect,
+      top: 42,
+      bottom: 70,
+    };
+    expect(
+      resolveThreadRowNestCollisions({
+        collisions: [rowCollision, groupCollision],
+        draggedLeft: NEST_INDENTATION_PX,
+        droppableRects: new Map([[rowId("parent-a"), shiftedRect]]),
+        fallbackRowRects: new Map([["parent-a", rect]]),
+        pointerCoordinates: { x: 20, y: 114 },
+        getBandFraction: () => NEST_BAND_FRACTION,
+      }),
+    ).toEqual([rowCollision, groupCollision]);
   });
 
   it("cancels parenting after moving twelve pixels left", () => {
