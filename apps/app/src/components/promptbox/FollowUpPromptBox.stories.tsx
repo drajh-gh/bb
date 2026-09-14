@@ -66,6 +66,7 @@ import {
   STORY_CLAUDE_REASONING,
   STORY_CODEX_MODELS,
   STORY_ENVIRONMENT_PROVIDERS,
+  PROJECT_NAMES,
   STORY_PROVIDER_OPTIONS,
 } from "../../../.ladle/story-fixtures";
 import type {
@@ -178,7 +179,7 @@ const readOnlyPermission: ExecutionPermissionConfig = {
 interface EnvironmentSummaryArgs {
   environment: Environment;
   host: EnvironmentDisplayHostContext;
-  projectName?: string;
+  projectName?: string | null;
   machineName?: string;
   hasMultipleMachines?: boolean;
   hostType?: Host["type"];
@@ -190,7 +191,7 @@ interface EnvironmentSummaryArgs {
 function makeEnvironmentSummary({
   environment,
   host,
-  projectName,
+  projectName = PROJECT_NAMES.bb,
   machineName,
   hasMultipleMachines = false,
   hostType = "persistent",
@@ -228,7 +229,7 @@ function makeEnvironmentSummary({
       : undefined);
   return (
     <ThreadEnvironmentSummary
-      projectName={projectName}
+      projectName={projectName ?? undefined}
       environmentLabel={summaryDisplay?.label}
       environmentCompactLabel={summaryDisplay?.compactLabel}
       environmentIcon={summaryDisplay?.icon}
@@ -345,6 +346,17 @@ const provisioningEnvironmentSummary: ReactNode = makeEnvironmentSummary({
     status: "provisioning",
   }),
   host: localEnvironmentDisplayHost,
+});
+
+const personalEnvironmentSummary: ReactNode = makeEnvironmentSummary({
+  environment: makeEnvironment({
+    environmentProviderId: "personal-workspace",
+    branchName: null,
+    status: "ready",
+  }),
+  host: localEnvironmentDisplayHost,
+  projectName: null,
+  onCreateNewThreadInEnvironment: noop,
 });
 
 const destroyedEnvironmentSummary: ReactNode = makeEnvironmentSummary({
@@ -1179,6 +1191,15 @@ export function EnvironmentMatrix() {
         />
       </StoryRow>
       <StoryRow
+        label="ready · personal workspace"
+        hint="no project chip, no branch; the provider names the environment"
+      >
+        <Row
+          submitMode={{ kind: "ready" }}
+          environmentSummary={personalEnvironmentSummary}
+        />
+      </StoryRow>
+      <StoryRow
         label="ready · second machine"
         hint="machine name once more than one machine exists"
       >
@@ -1255,28 +1276,13 @@ export function EnvironmentMatrix() {
   );
 }
 
-export function ProvisioningEnvironmentSummary() {
-  return (
-    <StoryCard>
-      <StoryRow
-        label="provisioning"
-        hint="active loading icon + lifecycle label"
-      >
-        <div className="w-full max-w-xl rounded-md border bg-background p-3">
-          {provisioningEnvironmentSummary}
-        </div>
-      </StoryRow>
-    </StoryCard>
-  );
-}
-
 export function WorktreeNamingContract() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
     <StoryCard>
       <StoryRow
         label="custom name"
-        hint="clearing the alias restores the host as environment identity"
+        hint="clearing the alias falls back to the provider name"
       >
         <DialogStage>
           <EnvironmentRenameDialogContent
@@ -1294,11 +1300,12 @@ export function WorktreeNamingContract() {
       </StoryRow>
       <StoryRow
         label="after clear"
-        hint="host identifies the environment; branch remains checkout metadata"
+        hint="the provider names the environment; branch remains checkout metadata"
       >
-        <div className="w-full max-w-xl rounded-md border bg-background p-3">
-          {worktreeEnvironmentSummary}
-        </div>
+        <Row
+          submitMode={{ kind: "ready" }}
+          environmentSummary={worktreeEnvironmentSummary}
+        />
       </StoryRow>
     </StoryCard>
   );
