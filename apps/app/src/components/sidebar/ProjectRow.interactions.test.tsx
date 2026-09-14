@@ -17,6 +17,7 @@ import {
   ChronologicalSectionThreadSections,
   DropPreviewRow,
   ProjectRow,
+  SectionThreadDragOverlay,
   type ProjectThreadListState,
 } from "./ProjectRow";
 import { buildSidebarEntitySectionId } from "@bb/client-core";
@@ -146,6 +147,15 @@ describe("ProjectRow interactions", () => {
     expect(preview?.textContent).toBe("Test thread");
     expect(preview?.className).toContain("opacity-50");
     expect(preview?.className).not.toContain("border-dashed");
+  });
+
+  it("keeps the dragged copy translucent above potential targets", () => {
+    render(<SectionThreadDragOverlay thread={makeThread()} />);
+
+    const overlay = document.querySelector(
+      '[data-sidebar-section-drag-overlay="true"]',
+    );
+    expect(overlay?.className).toContain("opacity-70");
   });
 
   afterEach(() => {

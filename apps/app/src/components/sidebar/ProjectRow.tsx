@@ -1302,8 +1302,8 @@ export function DropPreviewRow({
         visible
           ? thread
             ? cn(
-              COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
-              "text-sidebar-foreground opacity-50",
+                COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
+                "text-sidebar-foreground opacity-50",
               )
             : cn(
                 COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
@@ -1340,7 +1340,11 @@ export function SectionThreadDragOverlayPortal({
   );
 }
 
-function SectionThreadDragOverlay({ thread }: { thread: ThreadListEntry }) {
+export function SectionThreadDragOverlay({
+  thread,
+}: {
+  thread: ThreadListEntry;
+}) {
   return (
     <div
       aria-hidden="true"
@@ -1349,7 +1353,7 @@ function SectionThreadDragOverlay({ thread }: { thread: ThreadListEntry }) {
       className={cn(
         SIDEBAR_ROW_BASE_CLASS,
         COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
-        "pointer-events-none bg-sidebar-accent text-sidebar-accent-foreground shadow-sm ring-1 ring-sidebar-border",
+        "pointer-events-none bg-sidebar-accent text-sidebar-accent-foreground opacity-70 shadow-sm ring-1 ring-sidebar-border",
       )}
     >
       <span className="min-w-0 flex-1 truncate">
