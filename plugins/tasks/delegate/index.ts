@@ -57,6 +57,7 @@ interface SeedPromptInput {
   recentComments: readonly Comment[];
   presetInstructions: string;
   extraInstructions?: string;
+  coordinatorThreadId: string | null;
 }
 
 function markdownSection(title: string, body: string): string {
@@ -109,7 +110,7 @@ export function buildSeedPrompt(input: SeedPromptInput): string {
     markdownSection("Recent comments", formatComments(input.recentComments)),
     markdownSection(
       "Report-back contract",
-      `You are working on task ${input.task.key}. Use the bb tasks CLI: comment substantive updates (bb tasks comment ${input.task.key} --body ...), attach result artifacts, set status when done (bb tasks update ${input.task.key} --status in_review) or explain blockage in a comment. Your thread is already attached to the task.`,
+      `You are working on task ${input.task.key}. Continue through implementation, verification, compaction, and reporting until the authorized outcome reaches a terminal boundary; never ask the operator to say “continue.” Use the bb tasks CLI: comment substantive updates (bb tasks comment ${input.task.key} --body ...), attach result artifacts, set status when done (bb tasks update ${input.task.key} --status in_review) or explain blockage in a comment. Your thread is already attached to the task.${input.coordinatorThreadId === null ? "" : ` Route routine questions, actionable blockers, exact Control Tower needs, and the concise outcome to the parent Operations thread ${input.coordinatorThreadId} through BB thread messaging instead of asking the operator directly. When an exact Control Tower decision is required, pause after creating the packet and resume this same work when its receipt arrives; approval covers only its selected steps. Send one concise completion receipt to Operations.`}`,
     ),
   ];
 
@@ -161,6 +162,43 @@ function requireLinkedBbProject(project: Project): string {
     "project_not_linked",
     `Task project "${project.name}" is not linked to a bb project`,
   );
+}
+
+async function coordinatorThreadId(
+  bb: BbPluginApi,
+  projectId: string,
+): Promise<string | null> {
+  try {
+    let coordinator: string | null = null;
+    for (let offset = 0; offset < 1_000; offset += 100) {
+      const result = await bb.sdk.threads.list({
+        projectId,
+        archived: false,
+        includeHidden: false,
+        hasParent: false,
+        limit: 100,
+        offset,
+      });
+      for (const thread of result) {
+        if (
+          thread.pinnedAt !== null &&
+          thread.parentThreadId === null &&
+          /(?:^|\s)Operations$/i.test(thread.title?.trim() ?? "")
+        ) {
+          if (coordinator !== null) return null;
+          coordinator = thread.id;
+        }
+      }
+      if (result.length < 100) return coordinator;
+    }
+    bb.log.warn(`Operations lookup exceeded its page bound for ${projectId}`);
+    return null;
+  } catch (error) {
+    bb.log.warn(
+      `Could not resolve the pinned Operations thread for ${projectId}: ${errorMessage(error)}`,
+    );
+    return null;
+  }
 }
 
 function collectAttachments(
@@ -317,6 +355,7 @@ export function handlers(
         serviceTier: preset.serviceTier,
         permissionMode: preset.permissionMode,
       });
+      const parentThreadId = await coordinatorThreadId(bb, linkedBbProjectId);
       const prompt = buildSeedPrompt({
         task,
         project,
@@ -325,6 +364,7 @@ export function handlers(
         recentComments,
         presetInstructions: preset.instructions,
         extraInstructions: input.extraInstructions,
+        coordinatorThreadId: parentThreadId,
       });
 
       const environment = await presetSpawnEnvironment(bb, preset);
@@ -341,6 +381,8 @@ export function handlers(
           permissionMode: execution.permissionMode,
           title,
           prompt,
+          visibility: "hidden",
+          ...(parentThreadId === null ? {} : { parentThreadId }),
         })
         .catch((error: unknown) => mapSpawnTargetError(error, preset));
 

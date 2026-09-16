@@ -105,6 +105,15 @@ uses repeatedly before dispatching work.
 
 Delegation creates a worker thread in the linked bb project, attaches that
 thread to the task, and advances a `backlog` or `todo` task to `in_progress`.
+Delegated workers are hidden from the normal thread list and remain inspectable
+from their task. When the project has exactly one visible pinned root thread
+named `Operations` or ending in ` Operations`, delegated workers are nested
+under it and report routine questions, blockers, exact approval needs, and
+outcomes there. Projects with no unambiguous Operations thread still receive a
+hidden standalone worker.
+Coordinator lookup examines at most 1,000 visible root threads. If the lookup
+fails, is incomplete, or finds multiple Operations threads, the worker remains
+hidden and standalone, inspectable from its Task.
 The worker receives the task description, subtasks, attachments, recent
 comments, preset instructions, and a report-back contract. Its installed Tasks
 skill tells it to inspect the task, leave substantive milestone comments,
@@ -115,7 +124,8 @@ thread with `bb tasks attach KEY`. The inverse is `bb tasks detach KEY
 [--thread <id>]`, and each thread card on the task page has a detach control;
 use either to drop a thread that died or moved on to other work. The task
 page and `bb tasks threads` list live threads before completed or failed ones,
-newest first.
+newest first. Attaching a thread does not change its visibility or parent, so
+threads created manually by the operator remain first-class conversations.
 
 ## Task mentions
 
