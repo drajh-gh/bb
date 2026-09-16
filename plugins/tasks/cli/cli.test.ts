@@ -267,6 +267,53 @@ describe("bb tasks CLI", () => {
     await harness.dispose();
   });
 
+  it("archives and restores terminal tasks through the CLI", async () => {
+    const { bb, harness } = createFakePluginHost({ pluginId: "tasks" });
+    await plugin(bb);
+    const store = createStore(bb);
+    const project = store.tasks.createProject({
+      name: "Archive",
+      prefix: "ARC",
+      color: "blue",
+    });
+    const task = store.tasks.createTask({
+      projectId: project.id,
+      title: "Finished",
+      status: "done",
+    });
+
+    expect(stdout(await harness.runCli(["archive", task.key]))).toBe(
+      `Archived ${task.key}`,
+    );
+    const archived = JSON.parse(
+      stdout(
+        await harness.runCli([
+          "list",
+          "--project",
+          "ARC",
+          "--archived",
+          "--json",
+        ]),
+      ),
+    ) as { tasks: Array<{ key: string; archivedAt: string | null }> };
+    expect(archived.tasks).toEqual([
+      expect.objectContaining({
+        key: task.key,
+        archivedAt: expect.any(String),
+      }),
+    ]);
+
+    expect(stdout(await harness.runCli(["restore", task.key]))).toBe(
+      `Restored ${task.key}`,
+    );
+    expect(store.tasks.getTask(task.id)).toMatchObject({
+      status: "done",
+      archivedAt: null,
+    });
+
+    await harness.dispose();
+  });
+
   it("assigns and promotes task parents by key or ID with stable JSON output", async () => {
     const { bb, harness } = createFakePluginHost({ pluginId: "tasks" });
     await plugin(bb);

@@ -119,7 +119,7 @@ export function createStore(bb: BbPluginApi): TasksApiStore {
             `
               SELECT COUNT(*) AS count
               FROM tasks
-              WHERE status NOT IN ('done', 'canceled')
+              WHERE status NOT IN ('done', 'canceled') AND archived_at IS NULL
             `,
           )
           .get()?.count ?? 0
@@ -139,6 +139,8 @@ export function createStore(bb: BbPluginApi): TasksApiStore {
             LEFT JOIN tasks t
               ON t.project_id = p.id
               AND t.parent_task_id IS NULL
+              AND t.archived_at IS NULL
+              AND t.status NOT IN ('done', 'canceled')
             LEFT JOIN task_threads tt ON tt.task_id = t.id
             GROUP BY p.id
             ORDER BY p.name COLLATE NOCASE, p.id
@@ -638,7 +640,7 @@ export function registerHandlers(
           );
         }
         const taskIds = store.tasks
-          .listTasks({ projectId: input.projectId })
+          .listTasks({ projectId: input.projectId, archive: "all" })
           .map((task) => task.id);
         const attachments = attachmentsForTasks(store.tasks, taskIds);
         const deleted = store.tasks.deleteProject(input.projectId);
@@ -764,6 +766,34 @@ export function registerHandlers(
       }
       return { deleted };
     },
+    archiveTasks(input) {
+      const tasks = store.tasks.archiveTasks(input.projectId, input.taskIds);
+      for (const task of tasks) {
+        store.tasks.createComment({
+          taskId: task.id,
+          kind: "system",
+          authorName: input.authorName,
+          body: `Archived by ${input.authorName}`,
+        });
+        publishTasksChanged(bb, task.id, task.projectId);
+        publishCommentsChanged(bb, task.id);
+      }
+      return { tasks: apiTasks(store, tasks) };
+    },
+    restoreTasks(input) {
+      const tasks = store.tasks.restoreTasks(input.projectId, input.taskIds);
+      for (const task of tasks) {
+        store.tasks.createComment({
+          taskId: task.id,
+          kind: "system",
+          authorName: input.authorName,
+          body: `Restored from archive by ${input.authorName}`,
+        });
+        publishTasksChanged(bb, task.id, task.projectId);
+        publishCommentsChanged(bb, task.id);
+      }
+      return { tasks: apiTasks(store, tasks) };
+    },
     listTasks(input) {
       const page = store.tasks.listTasksPage({
         projectId: input.projectId,
@@ -771,6 +801,7 @@ export function registerHandlers(
         priorities: input.priorities,
         labelIds: input.labelIds,
         activeOnly: input.activeOnly,
+        archive: input.archive,
         parentTaskId: input.parentTaskId,
         search: input.search,
         sort: input.sort,

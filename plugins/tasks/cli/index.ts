@@ -66,6 +66,8 @@ Commands:
   list                           List tasks
   show                           Show full task details
   update                         Update a task
+  archive                        Archive terminal tasks
+  restore                        Restore archived terminal tasks
   comment                        Add a task comment
   label create|list|delete
   attachment add|get|list|remove
@@ -95,10 +97,12 @@ tasks are deleted.`;
 
 const CREATE_HELP =
   "Usage: bb tasks create [--project <prefix-or-id>] --title <title> [--description <markdown> | --description-file <path>] [--priority <priority>] [--label <name>]... [--due YYYY-MM-DD] [--parent <key-or-id>] [--attach <path>]... [--machine <id-or-name>] [--json]";
-const LIST_HELP = `Usage: bb tasks list [--project <prefix-or-id>] [--status <status>]... [--priority <priority>]... [--label <name>]... [--active] [--search <query>] [--sort manual|priority|due] [--limit <1-${TASKS_PAGE_MAX_LIMIT}>] [--cursor <opaque>] [--json]`;
+const LIST_HELP = `Usage: bb tasks list [--project <prefix-or-id>] [--status <status>]... [--priority <priority>]... [--label <name>]... [--active] [--archived | --include-archived] [--search <query>] [--sort manual|priority|due] [--limit <1-${TASKS_PAGE_MAX_LIMIT}>] [--cursor <opaque>] [--json]`;
 const SHOW_HELP = "Usage: bb tasks show <key-or-id> [--json]";
 const UPDATE_HELP =
   "Usage: bb tasks update <key-or-id> [--status <status>] [--priority <priority>] [--title <title>] [--description <markdown> | --description-file <path>] [--due YYYY-MM-DD | --no-due] [--parent <key-or-id> | --no-parent] [--add-label <name>]... [--remove-label <name>]... [--machine <id-or-name>] [--json]";
+const ARCHIVE_HELP = "Usage: bb tasks archive <key-or-id>... [--json]";
+const RESTORE_HELP = "Usage: bb tasks restore <key-or-id>... [--json]";
 const COMMENT_HELP =
   "Usage: bb tasks comment <key-or-id> (--body <markdown> | --body-file <path>) [--author <name>] [--machine <id-or-name>] [--notify] [--json]";
 const LABEL_HELP = `Usage:
@@ -1044,8 +1048,11 @@ async function runList(
       "limit",
       "cursor",
     ],
-    ["active"],
+    ["active", "archived", "include-archived"],
   );
+  if (args.flags.has("archived") && args.flags.has("include-archived")) {
+    throw new CliError("--archived and --include-archived cannot be combined");
+  }
   requirePositionals(args, 0, LIST_HELP);
   const sortOption = option(args, "sort") ?? "manual";
   const sort = TASK_SORTS.find((candidate) => candidate === sortOption);
@@ -1089,6 +1096,11 @@ async function runList(
             : undefined,
         labelIds: labelIds.length > 0 ? labelIds : undefined,
         activeOnly: args.flags.has("active"),
+        archive: args.flags.has("include-archived")
+          ? "all"
+          : args.flags.has("archived")
+            ? "archived"
+            : "active",
         search: option(args, "search"),
         sort,
         limit: taskPageLimit(args),
@@ -1131,6 +1143,46 @@ async function runList(
   return result.nextCursor === null
     ? output
     : `${output}\n\nMore results are available. Re-run with the same filters and add: --limit ${limit} --cursor ${result.nextCursor}`;
+}
+
+async function runArchiveAction(
+  domain: TasksDomain,
+  ctx: PluginCliContext,
+  argv: string[],
+  action: "archive" | "restore",
+): Promise<string> {
+  const args = parseArgs(argv);
+  const help = action === "archive" ? ARCHIVE_HELP : RESTORE_HELP;
+  if (args.flags.has("help")) return help;
+  assertAllowed(args, []);
+  if (args.positionals.length === 0) throw new CliError(`Usage: ${help}`);
+  const tasks = await Promise.all(
+    args.positionals.map((address) => resolveTask(domain, address)),
+  );
+  const projectId = tasks[0]!.projectId;
+  if (tasks.some((task) => task.projectId !== projectId)) {
+    throw new CliError(`${action} is limited to one project at a time`);
+  }
+  const input = {
+    projectId,
+    taskIds: tasks.map((task) => task.id),
+    authorName: taskAuthor(ctx),
+  };
+  const parsed =
+    action === "archive"
+      ? tasksRpcContract.archiveTasks.output.parse(
+          await domain.archiveTasks(
+            tasksRpcContract.archiveTasks.input.parse(input),
+          ),
+        )
+      : tasksRpcContract.restoreTasks.output.parse(
+          await domain.restoreTasks(
+            tasksRpcContract.restoreTasks.input.parse(input),
+          ),
+        );
+  return args.flags.has("json")
+    ? JSON.stringify({ tasks: parsed.tasks })
+    : `${action === "archive" ? "Archived" : "Restored"} ${parsed.tasks.map((task) => task.key).join(", ")}`;
 }
 
 async function runShow(domain: TasksDomain, argv: string[]): Promise<string> {
@@ -1982,6 +2034,16 @@ export function registerTasksCli(
         usage: UPDATE_HELP,
       },
       {
+        name: "archive",
+        summary: "Archive terminal tasks without deleting history",
+        usage: ARCHIVE_HELP,
+      },
+      {
+        name: "restore",
+        summary: "Restore archived terminal tasks",
+        usage: RESTORE_HELP,
+      },
+      {
         name: "comment",
         summary: "Add a markdown comment to a task",
         usage: COMMENT_HELP,
@@ -2064,6 +2126,12 @@ export function registerTasksCli(
             break;
           case "update":
             stdout = await runUpdate(bb, domain, ctx, rest);
+            break;
+          case "archive":
+            stdout = await runArchiveAction(domain, ctx, rest, "archive");
+            break;
+          case "restore":
+            stdout = await runArchiveAction(domain, ctx, rest, "restore");
             break;
           case "comment":
             stdout = await runComment(bb, store, domain, ctx, rest);

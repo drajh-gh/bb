@@ -918,6 +918,42 @@ describe("Tasks RPC domain API", () => {
       }),
     ]);
 
+    const archiveResult = tasksRpcContract.archiveTasks.output.parse(
+      await harness.callRpc("archiveTasks", {
+        projectId: project.id,
+        taskIds: [createResult.task.id],
+        authorName: "Sawyer",
+      }),
+    );
+    expect(archiveResult.tasks).toEqual([
+      expect.objectContaining({
+        id: createResult.task.id,
+        status: "done",
+        archivedAt: expect.any(String),
+      }),
+    ]);
+    const restoredResult = tasksRpcContract.restoreTasks.output.parse(
+      await harness.callRpc("restoreTasks", {
+        projectId: project.id,
+        taskIds: [createResult.task.id],
+        authorName: "Sawyer",
+      }),
+    );
+    expect(restoredResult.tasks).toEqual([
+      expect.objectContaining({
+        id: createResult.task.id,
+        status: "done",
+        archivedAt: null,
+        closedAt: expect.any(String),
+      }),
+    ]);
+    expect(store.tasks.listComments(createResult.task.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ body: "Archived by Sawyer" }),
+        expect.objectContaining({ body: "Restored from archive by Sawyer" }),
+      ]),
+    );
+
     const subtask = store.tasks.createTask({
       projectId: project.id,
       parentTaskId: createResult.task.id,
@@ -953,8 +989,8 @@ describe("Tasks RPC domain API", () => {
       projects: [
         {
           projectId: project.id,
-          taskCount: 3,
-          activeAgentCount: 1,
+          taskCount: 1,
+          activeAgentCount: 0,
         },
       ],
     });

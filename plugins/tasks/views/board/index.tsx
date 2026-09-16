@@ -61,7 +61,10 @@ async function fetchBoard(
   rpc: TasksRpc,
   projectId: string,
 ): Promise<BoardData> {
-  const tasks = await listAllTasks(rpc, { projectId });
+  const tasks = await listAllTasks(rpc, {
+    projectId,
+    statuses: ["backlog", "todo", "in_progress", "in_review"],
+  });
   const topLevel = tasks.filter((task) => task.parentTaskId === null);
 
   const labels = await rpc.call("listLabels", { projectId }).then(

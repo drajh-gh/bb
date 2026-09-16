@@ -16,7 +16,7 @@ interface ListTaskFilters {
 
 export function useListTasks(
   projectId: string | null,
-  activeOnly: boolean,
+  mode: "focus" | "recent" | "archive" | "active",
   filters: ListTaskFilters,
 ) {
   return useTasksQuery(
@@ -32,13 +32,26 @@ export function useListTasks(
         ...(filters.labelIds !== null
           ? { labelIds: [...filters.labelIds] }
           : {}),
-        activeOnly,
+        ...(mode === "focus"
+          ? {
+              statuses: [
+                "backlog",
+                "todo",
+                "in_progress",
+                "in_review",
+              ] as TaskStatus[],
+            }
+          : mode === "recent"
+            ? { statuses: ["done", "canceled"] as TaskStatus[] }
+            : {}),
+        activeOnly: mode === "active",
+        archive: mode === "archive" ? "archived" : "active",
         parentTaskId: null,
       }),
     ["tasks:changed", "threads:changed"],
     [
       projectId,
-      activeOnly,
+      mode,
       filters.statuses.join(),
       filters.priorities.join(),
       filters.labelIds === null ? "" : `active:${filters.labelIds.join()}`,
