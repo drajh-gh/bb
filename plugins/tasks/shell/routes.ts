@@ -55,6 +55,15 @@ export function parseTasksRoute(rawSubPath: string): TasksRoute {
   };
 }
 
+export function allowsNewTask(route: TasksRoute): boolean {
+  return (
+    route.kind !== "task" &&
+    route.kind !== "manage" &&
+    route.kind !== "recent" &&
+    route.kind !== "archive"
+  );
+}
+
 export function tasksRouteToSubPath(route: TasksRoute): string {
   switch (route.kind) {
     case "all":

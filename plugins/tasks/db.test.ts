@@ -128,6 +128,159 @@ describe("tasks storage", () => {
     }
   });
 
+  it("archives and restores a parent with its sub-tasks as one unit", async () => {
+    const { db, harness, store } = setup();
+    try {
+      const project = createProject(store, "SUB");
+      const parent = store.createTask({
+        projectId: project.id,
+        title: "Ship the feature",
+      });
+      const closedSubtask = store.createTask({
+        projectId: project.id,
+        parentTaskId: parent.id,
+        title: "Closed early",
+      });
+      const openSubtask = store.createTask({
+        projectId: project.id,
+        parentTaskId: parent.id,
+        title: "Still running",
+        status: "in_progress",
+      });
+      store.updateTask(closedSubtask.id, { status: "done" });
+      store.updateTask(parent.id, { status: "done" });
+      db.prepare(
+        "UPDATE tasks SET closed_at = ? WHERE closed_at IS NOT NULL",
+      ).run("2026-01-01T00:00:00.000Z");
+
+      expect(store.archiveClosedBefore("9999-12-31T00:00:00.000Z")).toEqual([]);
+      expect(() => store.archiveTasks(project.id, [parent.id])).toThrow(
+        "has open sub-tasks",
+      );
+      expect(() => store.archiveTasks(project.id, [closedSubtask.id])).toThrow(
+        `archive its parent ${parent.key} instead`,
+      );
+      expect(
+        store
+          .listTasks({ parentTaskId: parent.id })
+          .map((task) => task.id)
+          .sort(),
+      ).toEqual([closedSubtask.id, openSubtask.id].sort());
+
+      store.updateTask(openSubtask.id, { status: "canceled" });
+      expect(
+        store
+          .archiveClosedBefore("9999-12-31T00:00:00.000Z")
+          .map((task) => task.id),
+      ).toEqual([parent.id]);
+      for (const id of [closedSubtask.id, openSubtask.id]) {
+        expect(store.getTask(id)?.archivedAt).toEqual(expect.any(String));
+      }
+      expect(store.listTasks({ parentTaskId: parent.id })).toEqual([]);
+      expect(
+        store
+          .listTasks({ parentTaskId: parent.id, archive: "all" })
+          .map((task) => task.id)
+          .sort(),
+      ).toEqual([closedSubtask.id, openSubtask.id].sort());
+      expect(
+        store
+          .listSubtasks(parent.id)
+          .map((task) => task.id)
+          .sort(),
+      ).toEqual([closedSubtask.id, openSubtask.id].sort());
+
+      expect(() => store.restoreTasks(project.id, [closedSubtask.id])).toThrow(
+        `restore its parent ${parent.key} instead`,
+      );
+      expect(() =>
+        store.updateTask(closedSubtask.id, { parentTaskId: null }),
+      ).toThrow("before moving");
+      expect(store.getTask(closedSubtask.id)?.parentTaskId).toBe(parent.id);
+      expect(
+        store.updateTask(closedSubtask.id, { description: "Retained notes" })
+          .description,
+      ).toBe("Retained notes");
+      const unattached = store.createTask({
+        projectId: project.id,
+        title: "Unattached task",
+      });
+      expect(() =>
+        store.updateTask(unattached.id, { parentTaskId: parent.id }),
+      ).toThrow(`Restore task ${parent.key}`);
+      expect(() =>
+        store.createTask({
+          projectId: project.id,
+          parentTaskId: parent.id,
+          title: "Late addition",
+        }),
+      ).toThrow(`Restore task ${parent.key}`);
+
+      store.restoreTasks(project.id, [parent.id]);
+      expect(store.archiveClosedBefore("2026-01-02T00:00:00.000Z")).toEqual([]);
+      for (const id of [parent.id, closedSubtask.id, openSubtask.id]) {
+        expect(store.getTask(id)?.archivedAt).toBeNull();
+      }
+      expect(
+        store
+          .listTasks({ parentTaskId: parent.id })
+          .map((task) => task.id)
+          .sort(),
+      ).toEqual([closedSubtask.id, openSubtask.id].sort());
+
+      store.archiveTasks(project.id, [parent.id]);
+      expect(store.getTask(closedSubtask.id)?.archivedAt).toEqual(
+        expect.any(String),
+      );
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it("rolls back the whole archive or restore when a child write fails", async () => {
+    const { db, harness, store } = setup();
+    try {
+      const project = createProject(store, "ATM");
+      const parent = store.createTask({
+        projectId: project.id,
+        title: "Parent",
+        status: "done",
+      });
+      const child = store.createTask({
+        projectId: project.id,
+        parentTaskId: parent.id,
+        title: "Child",
+        status: "done",
+      });
+      db.exec(`
+        CREATE TRIGGER reject_child_archive BEFORE UPDATE OF archived_at ON tasks
+        WHEN OLD.parent_task_id IS NOT NULL
+        BEGIN SELECT RAISE(ABORT, 'child write failed'); END;
+      `);
+      expect(() => store.archiveTasks(project.id, [parent.id])).toThrow(
+        "child write failed",
+      );
+      expect(store.getTask(parent.id)?.archivedAt).toBeNull();
+      expect(store.getTask(child.id)?.archivedAt).toBeNull();
+      db.exec("DROP TRIGGER reject_child_archive");
+      store.archiveTasks(project.id, [parent.id]);
+      const archivedParent = store.getTask(parent.id);
+      const archivedChild = store.getTask(child.id);
+      db.exec(`
+        CREATE TRIGGER reject_child_restore BEFORE UPDATE OF archived_at ON tasks
+        WHEN OLD.parent_task_id IS NOT NULL
+        BEGIN SELECT RAISE(ABORT, 'child write failed'); END;
+      `);
+      expect(() => store.restoreTasks(project.id, [parent.id])).toThrow(
+        "child write failed",
+      );
+      expect(store.getTask(parent.id)).toEqual(archivedParent);
+      expect(store.getTask(child.id)).toEqual(archivedChild);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
   it("auto-archives only eligible future closures", async () => {
     const { db, harness, store } = setup();
     try {

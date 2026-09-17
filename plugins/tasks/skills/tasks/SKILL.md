@@ -82,12 +82,18 @@ For task dispatch and execution presets, read
    blocked task complete.
 
    Archiving is separate from status and is allowed only for Done or Canceled
-   tasks within one project. It preserves all task history and is recoverable:
+   top-level tasks within one project, once every sub-task is closed. It
+   preserves all task history and is recoverable:
 
    ```sh
    bb tasks archive ABC-12
    bb tasks restore ABC-12
    ```
+
+   Archive and restore carry the task's sub-tasks with it; archive or restore
+   the parent rather than a sub-task. Restoring resets the seven-day
+   auto-archive clock, so a restored task stays in Recently closed for another
+   seven days.
 
 6. Delegated threads are attached automatically. If this thread was not
    delegated from Tasks, attach it yourself so the task shows the active work:

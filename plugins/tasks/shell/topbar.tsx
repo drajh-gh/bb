@@ -2,7 +2,12 @@ import { useCallback, useMemo } from "react";
 import type { Project, Task } from "../shared/contract.js";
 import { groupTasksByStatus } from "../views/list/lib.js";
 import { listAllTasks, useTasksQuery } from "./data.js";
-import type { ResolvedTasksRoute, TaskViewMode, TasksRoute } from "./routes.js";
+import {
+  allowsNewTask,
+  type ResolvedTasksRoute,
+  type TaskViewMode,
+  type TasksRoute,
+} from "./routes.js";
 import { Button } from "@bb/shared-ui/button";
 import { Icon } from "@bb/shared-ui/icon";
 import { cn } from "@bb/shared-ui/lib/utils";
@@ -329,7 +334,7 @@ export function TasksTopbar({
               onNavigate({ kind: "recent", projectId: route.projectId })
             }
           >
-            <Icon name="History" className="size-3.5" />
+            <Icon name="TimeSchedule" className="size-3.5" />
           </Button>
           <Button
             variant="ghost"
@@ -361,10 +366,7 @@ export function TasksTopbar({
         </Button>
       ) : null}
       <RefreshTasksButton />
-      {route.kind !== "task" &&
-      route.kind !== "manage" &&
-      route.kind !== "recent" &&
-      route.kind !== "archive" ? (
+      {allowsNewTask(route) ? (
         <Button
           size="sm"
           className="h-7 gap-1.5 max-md:pointer-coarse:h-9"

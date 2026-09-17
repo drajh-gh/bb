@@ -201,6 +201,34 @@ async function selectSort(
 }
 
 describe("list filter/sort preference persistence", () => {
+  it.each([
+    { subPath: PROJECT_A, label: "Todo", statuses: ["todo"], key: "ALP-1" },
+    {
+      subPath: `recent/${PROJECT_A}`,
+      label: "Done",
+      statuses: ["done"],
+      key: "ALP-3",
+    },
+    { subPath: PROJECT_A, label: "Done", statuses: [], key: "ALP-1" },
+  ])(
+    "sends the selected status intersection for $subPath / $label",
+    async ({ subPath, label, statuses, key }) => {
+      const rpc = baseRpc();
+      const slot = renderSlot(app.navPanels[0]!, { subPath }, { rpc });
+      await slot.findByText(key);
+      rpc.listTasksCalls.length = 0;
+      fireEvent.click(slot.getByRole("button", { name: /^Status/ }));
+      fireEvent.click(
+        await slot.findByRole("menuitemcheckbox", { name: label }),
+      );
+      await waitFor(() =>
+        expect(rpc.listTasksCalls).toContainEqual(
+          expect.objectContaining({ projectId: PROJECT_A, statuses }),
+        ),
+      );
+    },
+  );
+
   it("restores sort and filters after unmount (navigation / remount)", async () => {
     const registration = app.navPanels[0]!;
     const slot = renderSlot(

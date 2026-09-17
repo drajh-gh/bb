@@ -61,15 +61,10 @@ async function fetchBoard(
   rpc: TasksRpc,
   projectId: string,
 ): Promise<BoardData> {
-  const tasks = await listAllTasks(rpc, {
-    projectId,
-    statuses: ["backlog", "todo", "in_progress", "in_review"],
-  });
-  const topLevel = tasks.filter((task) => task.parentTaskId === null);
-
-  const labels = await rpc.call("listLabels", { projectId }).then(
-    (result) => result.labels,
-    () => [],
+  const tasks = await listAllTasks(rpc, { projectId });
+  const boardStatuses: readonly TaskStatus[] = BOARD_STATUSES;
+  const topLevel = tasks.filter(
+    (task) => task.parentTaskId === null && boardStatuses.includes(task.status),
   );
   const subProgress = new Map<string, { done: number; total: number }>();
   for (const task of tasks) {
@@ -79,6 +74,11 @@ async function fetchBoard(
     if (task.status === "done") entry.done += 1;
     subProgress.set(task.parentTaskId, entry);
   }
+
+  const labels = await rpc.call("listLabels", { projectId }).then(
+    (result) => result.labels,
+    () => [],
+  );
   const activeTaskIds = await listAllTasks(rpc, {
     projectId,
     activeOnly: true,

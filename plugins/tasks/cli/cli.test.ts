@@ -314,6 +314,51 @@ describe("bb tasks CLI", () => {
     await harness.dispose();
   });
 
+  it("shows archived sub-tasks with their parent and caps archive batches", async () => {
+    const { bb, harness } = createFakePluginHost({ pluginId: "tasks" });
+    await plugin(bb);
+    const store = createStore(bb);
+    const project = store.tasks.createProject({
+      name: "Units",
+      prefix: "UNI",
+      color: "blue",
+    });
+    const parent = store.tasks.createTask({
+      projectId: project.id,
+      title: "Parent unit",
+    });
+    const subtask = store.tasks.createTask({
+      projectId: project.id,
+      parentTaskId: parent.id,
+      title: "Child unit",
+    });
+    store.tasks.updateTask(subtask.id, { status: "done" });
+    store.tasks.updateTask(parent.id, { status: "done" });
+    store.tasks.archiveTasks(project.id, [parent.id]);
+
+    const human = stdout(await harness.runCli(["show", parent.key]));
+    expect(human).toContain(`Archived`);
+    expect(human).toContain(subtask.key);
+    const shown = JSON.parse(
+      stdout(await harness.runCli(["show", parent.key, "--json"])),
+    ) as { subtasks: Array<{ key: string; archivedAt: string | null }> };
+    expect(shown.subtasks).toEqual([
+      expect.objectContaining({
+        key: subtask.key,
+        archivedAt: expect.any(String),
+      }),
+    ]);
+
+    await expect(
+      harness.runCli(["archive", ...Array(501).fill(parent.key)]),
+    ).resolves.toMatchObject({
+      exitCode: 1,
+      stderr: "archive accepts at most 500 tasks at a time; received 501",
+    });
+
+    await harness.dispose();
+  });
+
   it("assigns and promotes task parents by key or ID with stable JSON output", async () => {
     const { bb, harness } = createFakePluginHost({ pluginId: "tasks" });
     await plugin(bb);

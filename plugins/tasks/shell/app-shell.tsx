@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useProjects } from "./data.js";
 import {
+  allowsNewTask,
   parseTasksRoute,
   useTasksNavigation,
   type ResolvedTasksRoute,
@@ -119,7 +120,8 @@ function TasksAppShellContent({ subPath }: PluginNavPanelProps) {
     if (subPath.trim() !== "" || projects.isLoading) return;
     const projectId = loadProjectFocus();
     if (projectId === null) return;
-    if (!(projects.data ?? []).some((project) => project.id === projectId)) {
+    if (projects.error !== null || projects.data === undefined) return;
+    if (!projects.data.some((project) => project.id === projectId)) {
       storeProjectFocus(null);
       return;
     }
@@ -127,7 +129,7 @@ function TasksAppShellContent({ subPath }: PluginNavPanelProps) {
       { kind: "project", projectId, view: null },
       { replace: true },
     );
-  }, [navigation, projects.data, projects.isLoading, subPath]);
+  }, [navigation, projects.data, projects.error, projects.isLoading, subPath]);
 
   const lastBrowseRouteRef = useRef<TasksRoute | null>(null);
   useEffect(() => {
@@ -151,14 +153,11 @@ function TasksAppShellContent({ subPath }: PluginNavPanelProps) {
   }, [onTaskRoute]);
 
   const noProjects = projects.data !== undefined && projects.data.length === 0;
-  const newTaskProjectId =
-    route.kind === "project" ||
-    route.kind === "recent" ||
-    route.kind === "archive"
-      ? route.projectId
-      : null;
+  const newTaskProjectId = route.kind === "project" ? route.projectId : null;
+  const newTaskAllowed = allowsNewTask(route);
 
   useEffect(() => {
+    if (!newTaskAllowed) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "c" || event.metaKey || event.ctrlKey || event.altKey)
         return;
@@ -170,7 +169,7 @@ function TasksAppShellContent({ subPath }: PluginNavPanelProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [newTaskAllowed]);
 
   return (
     <div className="relative flex h-full min-h-0 bg-background text-foreground">

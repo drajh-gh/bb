@@ -131,18 +131,23 @@ export function createStore(bb: BbPluginApi): TasksApiStore {
           `
             SELECT
               p.id AS project_id,
-              COUNT(DISTINCT t.id) AS task_count,
-              COUNT(DISTINCT CASE
-                WHEN tt.live_status IN ('starting', 'working') THEN tt.thread_id
-              END) AS active_agent_count
+              (
+                SELECT COUNT(*) FROM tasks t
+                WHERE t.project_id = p.id
+                  AND t.parent_task_id IS NULL
+                  AND t.archived_at IS NULL
+                  AND t.status NOT IN ('done', 'canceled')
+              ) AS task_count,
+              (
+                SELECT COUNT(DISTINCT tt.thread_id)
+                FROM task_threads tt
+                JOIN tasks t ON t.id = tt.task_id
+                WHERE t.project_id = p.id
+                  AND t.parent_task_id IS NULL
+                  AND t.archived_at IS NULL
+                  AND tt.live_status IN ('starting', 'working')
+              ) AS active_agent_count
             FROM projects p
-            LEFT JOIN tasks t
-              ON t.project_id = p.id
-              AND t.parent_task_id IS NULL
-              AND t.archived_at IS NULL
-              AND t.status NOT IN ('done', 'canceled')
-            LEFT JOIN task_threads tt ON tt.task_id = t.id
-            GROUP BY p.id
             ORDER BY p.name COLLATE NOCASE, p.id
           `,
         )

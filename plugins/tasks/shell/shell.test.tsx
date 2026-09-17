@@ -210,6 +210,43 @@ describe("remembered project focus", () => {
     );
   });
 
+  it("keeps the remembered project when the projects query fails", async () => {
+    window.localStorage.setItem("bb-tasks:project-focus", PROJECT_ID);
+    let rejectProjects!: (reason: Error) => void;
+    const projectsResult = new Promise<never>((_resolve, reject) => {
+      rejectProjects = reject;
+    });
+    const slot = renderSlot(
+      app.navPanels[0]!,
+      { subPath: "" },
+      {
+        rpc: seededRpc({
+          listProjects: () => projectsResult,
+        }),
+      },
+    );
+    await act(async () => {
+      rejectProjects(new Error("transient projects failure"));
+    });
+    expect(slot.navigateCalls).toEqual([]);
+    expect(window.localStorage.getItem("bb-tasks:project-focus")).toBe(
+      PROJECT_ID,
+    );
+  });
+
+  it("forgets a remembered project the loaded list no longer contains", async () => {
+    window.localStorage.setItem("bb-tasks:project-focus", OTHER_PROJECT_ID);
+    const slot = renderSlot(
+      app.navPanels[0]!,
+      { subPath: "" },
+      { rpc: seededRpc({ listLabels: () => ({ labels: [] }) }) },
+    );
+    await waitFor(() =>
+      expect(window.localStorage.getItem("bb-tasks:project-focus")).toBeNull(),
+    );
+    expect(slot.navigateCalls).toEqual([]);
+  });
+
   it("keeps explicit Focus on the grouped project view", async () => {
     window.localStorage.setItem("bb-tasks:project-focus", PROJECT_ID);
     const slot = renderSlot(
@@ -1076,6 +1113,21 @@ describe("tasks app shell", () => {
     await slot.findByRole("dialog");
     fireEvent.keyDown(window, { key: "c" });
     expect(slot.getAllByRole("dialog")).toHaveLength(1);
+  });
+
+  it("leaves quick-create closed where Recent and Archive hide the button", async () => {
+    for (const subPath of [`recent/${PROJECT_ID}`, `archive/${PROJECT_ID}`]) {
+      const slot = renderSlot(
+        app.navPanels[0]!,
+        { subPath },
+        { rpc: seededRpc({ listLabels: () => ({ labels: [] }) }) },
+      );
+      await slot.findByRole("button", { name: "Focus" });
+      expect(slot.queryByRole("button", { name: "New task" })).toBeNull();
+      fireEvent.keyDown(window, { key: "c" });
+      expect(slot.queryByRole("dialog")).toBeNull();
+      cleanup();
+    }
   });
 
   it("marks only new-worktree presets with the worktree hint", async () => {

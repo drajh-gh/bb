@@ -20,6 +20,7 @@ import {
 import { delegationRpcContract } from "../delegate/contract";
 import { handlers as delegationHandlers } from "../delegate";
 import {
+  TASK_ARCHIVE_BATCH_MAX,
   tasksRpcContract,
   ULID_PATTERN,
   type Attachment,
@@ -1156,6 +1157,11 @@ async function runArchiveAction(
   if (args.flags.has("help")) return help;
   assertAllowed(args, []);
   if (args.positionals.length === 0) throw new CliError(`Usage: ${help}`);
+  if (args.positionals.length > TASK_ARCHIVE_BATCH_MAX) {
+    throw new CliError(
+      `${action} accepts at most ${TASK_ARCHIVE_BATCH_MAX} tasks at a time; received ${args.positionals.length}`,
+    );
+  }
   const tasks = await Promise.all(
     args.positionals.map((address) => resolveTask(domain, address)),
   );
@@ -1197,7 +1203,10 @@ async function runShow(domain: TasksDomain, argv: string[]): Promise<string> {
   const labels = task.labelIds.map((id) => labelById.get(id)!).filter(Boolean);
   const subtasks = await listAllTasks(
     domain,
-    tasksRpcContract.listTasks.input.parse({ parentTaskId: task.id }),
+    tasksRpcContract.listTasks.input.parse({
+      parentTaskId: task.id,
+      archive: "all",
+    }),
   );
   const comments = tasksRpcContract.listComments.output.parse(
     await domain.listComments(
@@ -1241,6 +1250,8 @@ async function runShow(domain: TasksDomain, argv: string[]): Promise<string> {
       ["Labels", labels.map((label) => label.name).join(", ") || "-"],
       ["Created", task.createdAt],
       ["Updated", task.updatedAt],
+      ["Closed", task.closedAt ?? "-"],
+      ["Archived", task.archivedAt ?? "-"],
     ]),
     `Description\n${task.description || "(none)"}`,
     `Sub-tasks\n${table(

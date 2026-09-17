@@ -261,7 +261,7 @@ export function TasksSidebar({
             active={route.kind === "recent"}
             onClick={() => onNavigate({ kind: "recent", projectId: null })}
           >
-            <Icon name="History" className="size-3.5 shrink-0" />
+            <Icon name="TimeSchedule" className="size-3.5 shrink-0" />
             <span className="flex-1">Recently closed</span>
           </SidebarRow>
           <SidebarRow

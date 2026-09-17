@@ -273,7 +273,7 @@ export function ListView({ projectId, mode }: ListViewProps) {
     } else if (mode === "recent") {
       body = (
         <EmptyState
-          icon="History"
+          icon="TimeSchedule"
           title="No recently closed tasks"
           description="Done and Canceled tasks stay here for seven days before they are archived."
         />

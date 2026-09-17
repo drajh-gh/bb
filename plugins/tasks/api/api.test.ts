@@ -990,9 +990,23 @@ describe("Tasks RPC domain API", () => {
         {
           projectId: project.id,
           taskCount: 1,
-          activeAgentCount: 0,
+          activeAgentCount: 1,
         },
       ],
+    });
+    store.tasks.upsertTaskThread({
+      taskId: createResult.task.id,
+      threadId: "thr_worker",
+      presetName: "Default",
+      title: "Implement API",
+      liveStatus: "completed",
+    });
+    expect(
+      tasksRpcContract.sidebarSummary.output.parse(
+        await harness.callRpc("sidebarSummary", null),
+      ),
+    ).toEqual({
+      projects: [{ projectId: project.id, taskCount: 1, activeAgentCount: 0 }],
     });
     await expect(
       harness.callRpc("deleteProject", { projectId: project.id }),
