@@ -109,7 +109,7 @@ jobs:
         include:
           - shard: server
             filter: --filter=@bb/server
-            args: ""
+            args: -- --maxWorkers=2
           # @bb/app is by far the largest suite (365 files) and was the critical
           # path once the macOS smoke leg was fixed. Vitest splits by file, and
           # Turbo hashes passthrough args, so each leg is a distinct cache entry
@@ -155,7 +155,7 @@ jobs:
           ELECTRON_RUN_AS_NODE=1 pnpm --filter @bb/desktop exec electron --version
 
       - name: Test
-        run: pnpm exec turbo run test ${{ matrix.filter }} --cache-dir=.turbo/cache --output-logs=new-only --concurrency=4 ${{ matrix.args }}
+        run: pnpm exec turbo run test ${{ matrix.filter }} --cache-dir=.turbo/cache --output-logs=new-only --concurrency=2 ${{ matrix.args }}
 
   # The macOS legs run without the Turbo cache. Blacksmith's transparent cache
   # only backs their Linux runners, so on macOS the cache moves over GitHub's
