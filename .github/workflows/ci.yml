@@ -22,7 +22,7 @@ concurrency:
 jobs:
   checks:
     name: Checks (ubuntu-latest, Node 22.x)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     # `actions: read` is what lets the cache-usage check call the Actions API;
@@ -100,7 +100,7 @@ jobs:
   # the same 4 vCPUs, which made tests the critical path of every run.
   tests:
     name: Tests (${{ matrix.shard }}, ubuntu-latest, Node 22.x)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     strategy:
@@ -173,10 +173,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: blacksmith-4vcpu-ubuntu-2404
+          - os: ubuntu-latest
             node-version: "22.x"
             turbo-cache: "true"
-          - os: blacksmith-6vcpu-macos-15
+          - os: macos-15
             node-version: "22.x"
             turbo-cache: "false"
 
@@ -219,16 +219,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: blacksmith-4vcpu-ubuntu-2404
+          - os: ubuntu-latest
             node-version: "24.x"
             turbo-cache: "true"
-          - os: blacksmith-4vcpu-ubuntu-2404
+          - os: ubuntu-latest
             node-version: "26.x"
             turbo-cache: "true"
-          - os: blacksmith-6vcpu-macos-15
+          - os: macos-15
             node-version: "24.x"
             turbo-cache: "false"
-          - os: blacksmith-6vcpu-macos-15
+          - os: macos-15
             node-version: "26.x"
             turbo-cache: "false"
 
