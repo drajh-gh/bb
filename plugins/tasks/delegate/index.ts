@@ -416,9 +416,6 @@ export function handlers(
           return attached;
         });
       } catch (error) {
-        // The thread already exists outside the Tasks database transaction. If
-        // attachment fails, make the orphan visible and top-level so the
-        // operator can recover it instead of leaving hidden work undiscoverable.
         try {
           await bb.sdk.threads.update({
             threadId: thread.id,
