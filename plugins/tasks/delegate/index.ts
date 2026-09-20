@@ -386,33 +386,52 @@ export function handlers(
         })
         .catch((error: unknown) => mapSpawnTargetError(error, preset));
 
-      const taskThread = store.transaction(() => {
-        const attached = store.tasks.upsertTaskThread({
-          taskId: task.id,
-          threadId: thread.id,
-          presetName: preset.name,
-          title,
-          liveStatus: "starting",
-        });
+      let taskThread;
+      try {
+        taskThread = store.transaction(() => {
+          const attached = store.tasks.upsertTaskThread({
+            taskId: task.id,
+            threadId: thread.id,
+            presetName: preset.name,
+            title,
+            liveStatus: "starting",
+          });
 
-        if (task.status === "backlog" || task.status === "todo") {
-          store.tasks.updateTask(task.id, { status: "in_progress" });
+          if (task.status === "backlog" || task.status === "todo") {
+            store.tasks.updateTask(task.id, { status: "in_progress" });
+            createSystemComment(store.tasks, {
+              taskId: task.id,
+              presetName: preset.name,
+              threadId: thread.id,
+              body: `Status changed to In Progress · dispatched to ${preset.name}`,
+            });
+          }
+
           createSystemComment(store.tasks, {
             taskId: task.id,
             presetName: preset.name,
             threadId: thread.id,
-            body: `Status changed to In Progress · dispatched to ${preset.name}`,
+            body: `Dispatched to ${preset.name}`,
           });
-        }
-
-        createSystemComment(store.tasks, {
-          taskId: task.id,
-          presetName: preset.name,
-          threadId: thread.id,
-          body: `Dispatched to ${preset.name}`,
+          return attached;
         });
-        return attached;
-      });
+      } catch (error) {
+        // The thread already exists outside the Tasks database transaction. If
+        // attachment fails, make the orphan visible and top-level so the
+        // operator can recover it instead of leaving hidden work undiscoverable.
+        try {
+          await bb.sdk.threads.update({
+            threadId: thread.id,
+            visibility: "visible",
+            ...(parentThreadId === null ? {} : { parentThreadId: null }),
+          });
+        } catch (compensationError) {
+          bb.log.error(
+            `Could not reveal delegated thread ${thread.id} after Task attachment failed: ${errorMessage(compensationError)}`,
+          );
+        }
+        throw error;
+      }
 
       try {
         const currentThread = await bb.sdk.threads.get({ threadId: thread.id });

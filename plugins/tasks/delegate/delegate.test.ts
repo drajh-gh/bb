@@ -710,6 +710,65 @@ describe("Operations routing", () => {
     await harness.dispose();
   });
 
+  it("reveals a spawned worker when Task attachment fails", async () => {
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "tasks",
+      sdk: {
+        threads: {
+          list: async (): Promise<ThreadListResult> => [operations],
+          spawn: async () => ({ id: "thr_orphan" }),
+          update: async () =>
+            makeThreadResponse({
+              id: "thr_orphan",
+              visibility: "visible",
+              parentThreadId: null,
+            }),
+        },
+      },
+    });
+    const store = createStore(bb);
+    const project = store.tasks.createProject({
+      name: "Routing",
+      prefix: "ROUTE",
+      color: "blue",
+      linkedBbProjectId: "proj_bb",
+    });
+    const task = store.tasks.createTask({
+      projectId: project.id,
+      title: "Recover orphan",
+    });
+    registerDelegation(bb, {
+      ...store,
+      transaction: () => {
+        throw new Error("Task attachment failed");
+      },
+    });
+
+    await expect(
+      harness.callRpc("delegate", {
+        taskId: task.id,
+        presetId: createTestPreset(store).id,
+      }),
+    ).rejects.toThrow("Task attachment failed");
+
+    expect(harness.sdk.callsTo("threads.spawn")[0]?.[0]).toMatchObject({
+      visibility: "hidden",
+      parentThreadId: "thr_operations",
+    });
+    expect(harness.sdk.callsTo("threads.update")).toEqual([
+      [
+        {
+          threadId: "thr_orphan",
+          visibility: "visible",
+          parentThreadId: null,
+        },
+      ],
+    ]);
+    expect(store.tasks.listTaskThreads(task.id)).toEqual([]);
+
+    await harness.dispose();
+  });
+
   it("attaches a direct user thread without changing visibility or parentage", async () => {
     const direct = makeThreadResponse({
       id: "thr_direct",
