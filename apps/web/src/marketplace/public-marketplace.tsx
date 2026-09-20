@@ -183,21 +183,9 @@ function PluginArtwork({
       </span>
     );
   }
-  const url = marketplaceAssetUrl(entry.icon.url);
-  const isSvg = new URL(url).pathname.toLowerCase().endsWith(".svg");
   return (
-    <span className={className} aria-hidden>
-      {isSvg ? (
-        <span
-          className="marketplace-svg-icon"
-          style={{
-            maskImage: `url(${JSON.stringify(url)})`,
-            WebkitMaskImage: `url(${JSON.stringify(url)})`,
-          }}
-        />
-      ) : (
-        <img src={url} alt="" />
-      )}
+    <span className={className}>
+      <img src={marketplaceAssetUrl(entry.icon.url)} alt="" />
     </span>
   );
 }
@@ -329,7 +317,9 @@ function PluginGrid({
   notable?: boolean;
 }) {
   return (
-    <div className="marketplace-grid">
+    <div
+      className={`marketplace-grid${notable ? " marketplace-grid-notable" : ""}`}
+    >
       {entries.map((entry) => (
         <PluginCard
           key={entry.id}
@@ -390,7 +380,7 @@ function Shelf({
       </div>
       <PluginGrid
         manifest={manifest}
-        entries={shelf.entries.slice(0, 3)}
+        entries={shelf.entries.slice(0, notable ? 4 : 3)}
         stats={stats}
         notable={notable}
       />

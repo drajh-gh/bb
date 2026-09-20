@@ -136,7 +136,6 @@ export function buildPluginProviderRegistration(args: {
 
   const composerActions: ProviderComposerAction[] = [
     { kind: "skills", trigger: "/" },
-    { kind: "skills", trigger: "$" },
   ];
   for (const action of declaration.composerActions) {
     composerActions.push(
@@ -185,7 +184,6 @@ export function buildPluginProviderRegistration(args: {
       modelCatalogScope: declaration.models.scope,
     },
     composerActions,
-    completedTurnDisplay: declaration.completedTurnDisplay,
     ...(strings === undefined
       ? {}
       : {

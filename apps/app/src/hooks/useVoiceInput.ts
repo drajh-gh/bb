@@ -112,17 +112,6 @@ function createRecordingFile(audioBlob: Blob, mimeType: string): File {
   });
 }
 
-function downloadRecording(file: File): void {
-  const url = URL.createObjectURL(file);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = file.name;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
 export function useVoiceInput(options: UseVoiceInputOptions) {
   const preferredAudioInputDeviceId = useAudioInputDevicePreferenceValue();
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -351,15 +340,7 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
             setState("idle");
             return;
           }
-          setState("error");
-          appToast.error("Voice input failed", {
-            description: resolveRecordingErrorMessage(error),
-            duration: Infinity,
-            action: {
-              label: "Download recording",
-              onClick: () => downloadRecording(audioFile),
-            },
-          });
+          showError(resolveRecordingErrorMessage(error));
         } finally {
           if (transcriptionAbortRef.current === abortController) {
             transcriptionAbortRef.current = null;

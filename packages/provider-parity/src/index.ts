@@ -79,7 +79,6 @@ export const projectParityRows: ParityRowProjector = ({
     contextWindowEvents,
     events: compactThreadTimelineSummaryEvents(withMeta),
     options: {
-      completedTurnDisplay: "collapse",
       includeDiagnosticOperations: true,
       includeNestedRows: true,
       isLatestPage: true,

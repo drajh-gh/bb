@@ -17,21 +17,24 @@ describe("visibleBoardStatuses", () => {
     canceled: Array.from({ length: canceled }, (_, index) => `c${index}`),
   });
 
-  it("shows only actionable workflow columns", () => {
+  it("hides the Canceled column while it is empty", () => {
     expect(visibleBoardStatuses(columns(0))).toEqual([
       "backlog",
       "todo",
       "in_progress",
       "in_review",
+      "done",
     ]);
   });
 
-  it("keeps terminal columns out even if stale data is present", () => {
+  it("appends Canceled at the end once it holds cards", () => {
     expect(visibleBoardStatuses(columns(2))).toEqual([
       "backlog",
       "todo",
       "in_progress",
       "in_review",
+      "done",
+      "canceled",
     ]);
   });
 });

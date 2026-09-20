@@ -190,21 +190,14 @@ export function canSubmitFollowUpShortcut({
   runtimeDisplayStatus,
   submitModeKind,
 }: CanSubmitFollowUpShortcutArgs): boolean {
-  if (isFollowUpSubmitting || isQueueMutationPending) {
-    return false;
-  }
-  const canSteerActiveWork =
+  return (
     (runtimeDisplayStatus === "active" ||
       runtimeDisplayStatus === "provisioning" ||
       runtimeDisplayStatus === "starting") &&
-    submitModeKind === "queue";
-  if (hasPromptDraftInput) {
-    return canSteerActiveWork;
-  }
-  return (
-    queuedMessageCount > 0 &&
-    (canSteerActiveWork ||
-      (runtimeDisplayStatus === "idle" && submitModeKind === "ready"))
+    submitModeKind === "queue" &&
+    !isFollowUpSubmitting &&
+    !isQueueMutationPending &&
+    (queuedMessageCount > 0 || hasPromptDraftInput)
   );
 }
 

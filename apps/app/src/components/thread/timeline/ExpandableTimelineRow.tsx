@@ -46,7 +46,6 @@ interface ExpandableTimelineRowProps {
   leadingIconFallback?: IconName;
   leadingIconUrl?: string;
   leadingIconStyle?: CSSProperties;
-  headerClassName?: string;
   summaryClassName?: string;
   onTitleAction?: TimelineTitleActionResolver;
   resolveSegmentLinkHref?: TimelineTitleLinkResolver;
@@ -83,7 +82,6 @@ function ExpandableTimelineRowComponent({
   collapsedPreview,
   expandable = true,
   forceExpanded = false,
-  headerClassName,
   horizontalPadding = "default",
   leadingIcon,
   leadingIconFallback,
@@ -227,10 +225,7 @@ function ExpandableTimelineRowComponent({
         expandable && !isExpanded && collapsedPreviewActive
       }
       className="w-full"
-      headerClassName={cn(
-        timelineRowHeaderClassName(horizontalPadding),
-        headerClassName,
-      )}
+      headerClassName={timelineRowHeaderClassName(horizontalPadding)}
       contentClassName={cn(horizontalPaddingClass, "pb-1 pt-0.5")}
       renderBody={renderBody}
     />

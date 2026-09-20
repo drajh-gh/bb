@@ -12,7 +12,7 @@ import {
   act,
   cleanup,
   fireEvent,
-  render as renderWithoutQueryClient,
+  render,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -56,17 +56,6 @@ import {
 import { PluginDetailPanelContext } from "./plugin-detail-navigation";
 import { openPluginDetailsInWorkspace } from "./plugin-detail-opener";
 import { PluginNewThreadComposer } from "./PluginNewThreadComposer";
-
-function render(element: ReactNode) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return renderWithoutQueryClient(element, {
-    wrapper: ({ children }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    ),
-  });
-}
 
 const mocks = vi.hoisted(() => ({
   promptBoxProps: [] as Array<Record<string, any>>,
@@ -196,7 +185,6 @@ vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
     mocks.sidebarNavigationSettled
       ? {
           data: {
-            sections: [],
             projects: [
               { ...PROJECT, threads: mocks.projectThreads },
               OTHER_PROJECT,
@@ -212,7 +200,6 @@ vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
           },
           isError: false,
           isLoading: false,
-          isPending: false,
           isSuccess: true,
           isPlaceholderData: mocks.sidebarNavigationReplayed,
         }
@@ -220,7 +207,6 @@ vi.mock("@/hooks/queries/sidebar-navigation-query", () => ({
           data: undefined,
           isError: false,
           isLoading: true,
-          isPending: true,
           isSuccess: false,
           isPlaceholderData: false,
         },
@@ -388,7 +374,7 @@ vi.mock("@/hooks/usePromptMentions", () => ({
 
 vi.mock("@/hooks/useCommandSuggestions", () => ({
   useCommandSuggestions: () => ({
-    triggers: [],
+    trigger: null,
     suggestions: [],
     isLoading: false,
     isError: false,
@@ -851,53 +837,6 @@ describe("PluginNewThreadComposer seeding", () => {
     });
   });
 
-  it("submits an initial thread token with its resolved mention range", async () => {
-    const threadId = "thr_abcdefghij";
-    mocks.projectThreads = [
-      makeThreadListEntry({
-        id: threadId,
-        projectId: "proj_1",
-        title: "Hand-off source",
-      }),
-    ];
-    const onSubmit = vi.fn<(request: NewThreadRequest) => void>();
-    const text = `Continue @thread:${threadId}`;
-    render(
-      <MemoryRouter>
-        <PluginNewThreadComposer
-          draftKey="initial-thread-mention"
-          defaultProjectId="proj_1"
-          initialPrompt={text}
-          onSubmit={onSubmit}
-        />
-      </MemoryRouter>,
-    );
-    await waitFor(() => {
-      expect(latestPromptBoxProps().value).toBe(text);
-      expect(latestPromptBoxProps().disabled).toBe(false);
-    });
-    await submit();
-    expect(onSubmit).toHaveBeenCalledOnce();
-    expect(onSubmit.mock.calls[0]?.[0].input).toEqual([
-      {
-        type: "text",
-        text,
-        mentions: [
-          {
-            start: 9,
-            end: text.length,
-            resource: {
-              kind: "thread",
-              threadId,
-              projectId: "proj_1",
-              label: "Hand-off source",
-            },
-          },
-        ],
-      },
-    ]);
-  });
-
   it("marks a provider picked in an unseeded plugin composer as explicit", async () => {
     const submitted: NewThreadRequest[] = [];
     render(
@@ -954,32 +893,6 @@ describe("PluginNewThreadComposer seeding", () => {
         "updated through the Composer API",
       );
     });
-  });
-
-  it("preserves plugin submission data through a new-thread composer", async () => {
-    const submitted: NewThreadRequest[] = [];
-    renderComposer(
-      STORED_REQUEST,
-      (request) => submitted.push(request),
-      "plugin-submission",
-    );
-
-    await waitFor(() => {
-      expect(latestPromptBoxProps().disabled).toBe(false);
-    });
-    const pluginSubmission = {
-      pluginId: "drafts",
-      data: { kind: "draft" } as const,
-    };
-    await act(async () => {
-      await latestPromptBoxProps().pluginComposerHost.submit(
-        { experimental_data: pluginSubmission.data },
-        pluginSubmission,
-      );
-    });
-
-    expect(submitted).toHaveLength(1);
-    expect(submitted[0]).toMatchObject({ pluginSubmission });
   });
 
   it("does not demote a project the replayed bootstrap does not know yet", async () => {

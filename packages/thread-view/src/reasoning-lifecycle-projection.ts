@@ -219,7 +219,6 @@ function finalizeReasoningLifecycleByKey(
     return null;
   }
 
-  const durationMs = args.meta.createdAt - lifecycle.startedAt;
   const message: EventProjectionOperationMessage = {
     kind: "operation",
     id: messageId(
@@ -238,10 +237,9 @@ function finalizeReasoningLifecycleByKey(
       ? { parentToolCallId: lifecycle.parentToolCallId }
       : {}),
     opType: "reasoning",
-    title:
-      durationMs > 0
-        ? `Thought for ${durationToCompactString(durationMs)}`
-        : "Thought",
+    title: `Thought for ${durationToCompactString(
+      args.meta.createdAt - lifecycle.startedAt,
+    )}`,
     detail: normalizeReasoningDetail(detail),
     status: args.status,
   };

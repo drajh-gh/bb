@@ -2168,10 +2168,7 @@ function ThreadTimelineRowsForTimelineView(props: ThreadTimelineRowsProps) {
                     <TimelineWindowingEnabledContext.Provider
                       value={props.timelineWindowingEnabled ?? false}
                     >
-                      <AutoHeightContainer
-                        snapRevision={heightSnapRevision}
-                        animateGrowth={!scopeActive}
-                      >
+                      <AutoHeightContainer snapRevision={heightSnapRevision}>
                         <TimelineRowsList
                           hasOlderTimelineRows={props.hasOlderTimelineRows}
                           isLoadingOlderTimelineRows={

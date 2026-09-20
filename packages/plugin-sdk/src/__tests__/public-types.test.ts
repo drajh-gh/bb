@@ -98,7 +98,6 @@ const EXPECTED_BACKEND_ROOT_TYPE_EXPORTS = [
   "ExperimentalPluginMentionImage",
   "PluginProviderCapabilities",
   "PluginProviderComposerAction",
-  "PluginProviderCompletedTurnDisplay",
   "PluginProviderDeclaration",
   "ExperimentalPluginProviderEnvContext",
   "ExperimentalPluginProviderEnvEntry",

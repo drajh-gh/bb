@@ -14,56 +14,31 @@ interface ListTaskFilters {
   labelIds: readonly string[] | null;
 }
 
-const FOCUS_STATUSES: readonly TaskStatus[] = [
-  "backlog",
-  "todo",
-  "in_progress",
-  "in_review",
-];
-const RECENT_STATUSES: readonly TaskStatus[] = ["done", "canceled"];
-
-export type ListTaskMode = "focus" | "recent" | "archive" | "active";
-
-export function requestedStatuses(
-  mode: ListTaskMode,
-  selected: readonly TaskStatus[],
-): readonly TaskStatus[] | undefined {
-  const allowed =
-    mode === "focus"
-      ? FOCUS_STATUSES
-      : mode === "recent"
-        ? RECENT_STATUSES
-        : null;
-  if (allowed === null) return selected.length > 0 ? selected : undefined;
-  if (selected.length === 0) return allowed;
-  return allowed.filter((status) => selected.includes(status));
-}
-
 export function useListTasks(
   projectId: string | null,
-  mode: ListTaskMode,
+  activeOnly: boolean,
   filters: ListTaskFilters,
 ) {
-  const statuses = requestedStatuses(mode, filters.statuses);
   return useTasksQuery(
     async (rpc) =>
       listAllTasks(rpc, {
         ...(projectId === null ? {} : { projectId }),
-        ...(statuses === undefined ? {} : { statuses: [...statuses] }),
+        ...(filters.statuses.length > 0
+          ? { statuses: [...filters.statuses] }
+          : {}),
         ...(filters.priorities.length > 0
           ? { priorities: [...filters.priorities] }
           : {}),
         ...(filters.labelIds !== null
           ? { labelIds: [...filters.labelIds] }
           : {}),
-        activeOnly: mode === "active",
-        archive: mode === "archive" ? "archived" : "active",
+        activeOnly,
         parentTaskId: null,
       }),
     ["tasks:changed", "threads:changed"],
     [
       projectId,
-      mode,
+      activeOnly,
       filters.statuses.join(),
       filters.priorities.join(),
       filters.labelIds === null ? "" : `active:${filters.labelIds.join()}`,

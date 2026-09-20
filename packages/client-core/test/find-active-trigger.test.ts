@@ -119,14 +119,13 @@ describe("findActiveTrigger", () => {
     ).toMatchObject({ query: "prompt!" });
   });
 
-  it("detects dollar as an explicit skill trigger", () => {
+  it("does not treat dollar as an active command trigger", () => {
     expect(
       findActiveTrigger(editorWithText("$openai-docs"), [
         { char: "@", kind: "mention" },
         { char: "/", kind: "command" },
-        { char: "$", kind: "command" },
       ]),
-    ).toMatchObject({ char: "$", kind: "command", query: "openai-docs" });
+    ).toBeNull();
   });
 
   it("detects a trigger near the caret in a very large document", () => {

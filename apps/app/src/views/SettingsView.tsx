@@ -174,17 +174,15 @@ interface GeneralSettingsSectionProps {
   onRewriteLocalhostLinksChange: (enabled: boolean) => void;
   onRichTextEditingChange: (enabled: boolean) => void;
   onSteerActiveThreadOnEnterChange: (enabled: boolean) => void;
+  onStreamerModeChange: (enabled: boolean) => void;
   openLinksInAppBrowser: boolean;
   rewriteLocalhostLinks: boolean;
   richTextEditing: boolean;
   steerActiveThreadOnEnter: boolean;
+  streamerMode: boolean;
 }
 
-interface PrivacySettingsSectionProps {
-  onStreamerModeChange: (enabled: boolean) => void;
-  streamerMode: boolean;
-  telemetryEnabled: boolean;
-  onTelemetryEnabledChange: (enabled: boolean) => void;
+interface DebugSettingsSectionProps {
   disabled: boolean;
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
@@ -845,175 +843,151 @@ export function GeneralSettingsSection({
   onRewriteLocalhostLinksChange,
   onRichTextEditingChange,
   onSteerActiveThreadOnEnterChange,
+  onStreamerModeChange,
   openLinksInAppBrowser,
   rewriteLocalhostLinks,
   richTextEditing,
   steerActiveThreadOnEnter,
+  streamerMode,
 }: GeneralSettingsSectionProps) {
   return (
-    <>
-      <SettingsSection title="Threads & editing">
-        <div className="space-y-5">
-          <SettingsWithControl
-            label={NAVIGATE_TO_THREAD_AFTER_CREATE_SETTING_LABEL}
-          >
-            <Switch
-              checked={navigateToThreadAfterCreate}
-              onCheckedChange={onNavigateToThreadAfterCreateChange}
-              aria-label={NAVIGATE_TO_THREAD_AFTER_CREATE_SETTING_LABEL}
-            />
-          </SettingsWithControl>
-
-          <SettingsWithControl label={RICH_TEXT_EDITING_SETTING_LABEL}>
-            <Switch
-              checked={richTextEditing}
-              onCheckedChange={onRichTextEditingChange}
-              aria-label={RICH_TEXT_EDITING_SETTING_LABEL}
-            />
-          </SettingsWithControl>
-
-          <SettingsWithControl
-            label={FOLLOW_UP_BEHAVIOR_SETTING_LABEL}
-            description="What Enter does in the prompt box while the thread runs."
-          >
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={SETTINGS_DROPDOWN_TRIGGER_CLASS}
-                  disabled={generalSettingsDisabled}
-                  aria-label={FOLLOW_UP_BEHAVIOR_SETTING_LABEL}
-                >
-                  {steerActiveThreadOnEnter ? "Steer" : "Queue"}
-                  <Icon
-                    name="ChevronDown"
-                    className="size-3.5 text-muted-foreground"
-                  />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className={cn(SETTINGS_DROPDOWN_CONTENT_CLASS, "max-w-72")}
-              >
-                {FOLLOW_UP_BEHAVIOR_OPTIONS.map((option) => (
-                  <DropdownMenuItem
-                    key={option.label}
-                    className="items-start"
-                    onSelect={() =>
-                      onSteerActiveThreadOnEnterChange(option.steerOnEnter)
-                    }
-                  >
-                    <span className="min-w-0">
-                      <span className="block">{option.label}</span>
-                      <span className="block text-2xs leading-snug text-subtle-foreground">
-                        {option.description}
-                      </span>
-                    </span>
-                    <Icon
-                      name="Check"
-                      className={cn(
-                        "ml-auto",
-                        steerActiveThreadOnEnter !== option.steerOnEnter &&
-                          "opacity-0",
-                        COARSE_POINTER_ICON_SIZE_CLASS,
-                      )}
-                    />
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SettingsWithControl>
-        </div>
-      </SettingsSection>
-      <SettingsSection title="Links">
-        <div className="space-y-5">
-          {desktopBrowserAvailable ? (
-            <SettingsWithControl
-              label={IN_APP_BROWSER_LINK_SETTING_LABEL}
-              description="Open web links inside bb."
-            >
-              <Switch
-                checked={openLinksInAppBrowser}
-                onCheckedChange={onOpenLinksInAppBrowserChange}
-                aria-label={IN_APP_BROWSER_LINK_SETTING_LABEL}
-              />
-            </SettingsWithControl>
-          ) : null}
-
-          <SettingsWithControl
-            label={REWRITE_LOCALHOST_LINKS_SETTING_LABEL}
-            description="Point localhost links at this host."
-          >
-            <Switch
-              checked={rewriteLocalhostLinks}
-              onCheckedChange={onRewriteLocalhostLinksChange}
-              aria-label={REWRITE_LOCALHOST_LINKS_SETTING_LABEL}
-            />
-          </SettingsWithControl>
-        </div>
-      </SettingsSection>
-      <SettingsSection title="Git">
-        <div className="space-y-5">
-          <ManagedBranchPrefixSetting
-            value={managedBranchPrefix}
-            disabled={generalSettingsDisabled}
-            onChange={onManagedBranchPrefixChange}
-          />
-        </div>
-      </SettingsSection>
-    </>
-  );
-}
-
-export function PrivacySettingsSection({
-  disabled,
-  enabled,
-  onEnabledChange,
-  streamerMode,
-  onStreamerModeChange,
-  telemetryEnabled,
-  onTelemetryEnabledChange,
-}: PrivacySettingsSectionProps) {
-  return (
-    <SettingsSection title="Privacy & diagnostics">
+    <SettingsSection title="General">
       <div className="space-y-5">
+        <SettingsWithControl
+          label={NAVIGATE_TO_THREAD_AFTER_CREATE_SETTING_LABEL}
+        >
+          <Switch
+            checked={navigateToThreadAfterCreate}
+            onCheckedChange={onNavigateToThreadAfterCreateChange}
+            aria-label={NAVIGATE_TO_THREAD_AFTER_CREATE_SETTING_LABEL}
+          />
+        </SettingsWithControl>
+
+        <SettingsWithControl label={RICH_TEXT_EDITING_SETTING_LABEL}>
+          <Switch
+            checked={richTextEditing}
+            onCheckedChange={onRichTextEditingChange}
+            aria-label={RICH_TEXT_EDITING_SETTING_LABEL}
+          />
+        </SettingsWithControl>
+
+        <SettingsWithControl
+          label={FOLLOW_UP_BEHAVIOR_SETTING_LABEL}
+          description="What Enter does in the prompt box while the thread runs."
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={SETTINGS_DROPDOWN_TRIGGER_CLASS}
+                disabled={generalSettingsDisabled}
+                aria-label={FOLLOW_UP_BEHAVIOR_SETTING_LABEL}
+              >
+                {steerActiveThreadOnEnter ? "Steer" : "Queue"}
+                <Icon
+                  name="ChevronDown"
+                  className="size-3.5 text-muted-foreground"
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className={cn(SETTINGS_DROPDOWN_CONTENT_CLASS, "max-w-72")}
+            >
+              {FOLLOW_UP_BEHAVIOR_OPTIONS.map((option) => (
+                <DropdownMenuItem
+                  key={option.label}
+                  className="items-start"
+                  onSelect={() =>
+                    onSteerActiveThreadOnEnterChange(option.steerOnEnter)
+                  }
+                >
+                  <span className="min-w-0">
+                    <span className="block">{option.label}</span>
+                    <span className="block text-2xs leading-snug text-subtle-foreground">
+                      {option.description}
+                    </span>
+                  </span>
+                  <Icon
+                    name="Check"
+                    className={cn(
+                      "ml-auto",
+                      steerActiveThreadOnEnter !== option.steerOnEnter &&
+                        "opacity-0",
+                      COARSE_POINTER_ICON_SIZE_CLASS,
+                    )}
+                  />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SettingsWithControl>
+
+        {desktopBrowserAvailable ? (
+          <SettingsWithControl
+            label={IN_APP_BROWSER_LINK_SETTING_LABEL}
+            description="Open web links inside bb."
+          >
+            <Switch
+              checked={openLinksInAppBrowser}
+              onCheckedChange={onOpenLinksInAppBrowserChange}
+              aria-label={IN_APP_BROWSER_LINK_SETTING_LABEL}
+            />
+          </SettingsWithControl>
+        ) : null}
+
+        <SettingsWithControl
+          label={REWRITE_LOCALHOST_LINKS_SETTING_LABEL}
+          description="Point localhost links at this host."
+        >
+          <Switch
+            checked={rewriteLocalhostLinks}
+            onCheckedChange={onRewriteLocalhostLinksChange}
+            aria-label={REWRITE_LOCALHOST_LINKS_SETTING_LABEL}
+          />
+        </SettingsWithControl>
+
+        <ManagedBranchPrefixSetting
+          value={managedBranchPrefix}
+          disabled={generalSettingsDisabled}
+          onChange={onManagedBranchPrefixChange}
+        />
+
         <SettingsWithControl
           label={STREAMER_MODE_SETTING_LABEL}
           description="Hide the custom models from config.json in every model picker, so a screen share does not show them."
         >
           <Switch
             checked={streamerMode}
-            disabled={disabled}
+            disabled={generalSettingsDisabled}
             onCheckedChange={onStreamerModeChange}
             aria-label={STREAMER_MODE_SETTING_LABEL}
           />
         </SettingsWithControl>
-
-        <SettingsWithControl
-          label="Share anonymous usage data"
-          description="Send anonymous app starts, thread and message counts, and plugin installs to help improve BB. Turning this off takes effect immediately for this server."
-        >
-          <Switch
-            checked={telemetryEnabled}
-            disabled={disabled}
-            onCheckedChange={onTelemetryEnabledChange}
-            aria-label="Share anonymous usage data"
-          />
-        </SettingsWithControl>
-
-        <SettingsWithControl
-          label={DIAGNOSTIC_EVENTS_SETTING_LABEL}
-          description="Show provider environment resolution and unhandled provider events for troubleshooting."
-        >
-          <Switch
-            checked={enabled}
-            disabled={disabled}
-            onCheckedChange={onEnabledChange}
-            aria-label={DIAGNOSTIC_EVENTS_SETTING_LABEL}
-          />
-        </SettingsWithControl>
       </div>
+    </SettingsSection>
+  );
+}
+
+export function DebugSettingsSection({
+  disabled,
+  enabled,
+  onEnabledChange,
+}: DebugSettingsSectionProps) {
+  return (
+    <SettingsSection title="Debug">
+      <SettingsWithControl
+        label={DIAGNOSTIC_EVENTS_SETTING_LABEL}
+        description="Show provider environment resolution and unhandled provider events for troubleshooting."
+      >
+        <Switch
+          checked={enabled}
+          disabled={disabled}
+          onCheckedChange={onEnabledChange}
+          aria-label={DIAGNOSTIC_EVENTS_SETTING_LABEL}
+        />
+      </SettingsWithControl>
     </SettingsSection>
   );
 }
@@ -1036,11 +1010,6 @@ const EXPERIMENT_DEFINITIONS: Record<
     label: "Multi-machine picker",
     description:
       "Use searchable, target-first environment and machine pickers when many machines are available.",
-  },
-  serverMove: {
-    label: "Server move",
-    description:
-      "Move the bb server to another machine from Settings → Machines, and export or import server data with bb server.",
   },
   sidebarProgressiveDisclosure: {
     label: "Sidebar progressive disclosure",
@@ -1223,10 +1192,22 @@ export function SettingsView() {
       <>
         <MachinesSettingsSection />
         <MachineAccessSettings />
+        <details
+          id="advanced-machine-settings"
+          open={location.hash === "#advanced-machine-settings" || undefined}
+          className="group space-y-6"
+        >
+          <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-subtle-foreground [&::-webkit-details-marker]:hidden">
+            Advanced settings
+            <Icon
+              name="ChevronRight"
+              className="size-3.5 transition-transform group-open:rotate-90"
+            />
+          </summary>
+          <MachineEnvironmentSettings />
+        </details>
       </>
     );
-  } else if (activeSection === "environment-variables") {
-    content = <MachineEnvironmentSettings />;
   } else if (activeSection === "updates") {
     content = (
       <UpdatesSettingsSection
@@ -1283,17 +1264,6 @@ export function SettingsView() {
               steerActiveThreadOnEnter: enabled,
             })
           }
-        />
-        <CliSkillsSettingsSection />
-        <VoiceInputSettingsSection />
-        <PrivacySettingsSection
-          telemetryEnabled={generalSettings.telemetryEnabled}
-          onTelemetryEnabledChange={(enabled) =>
-            updateGeneralSettingsMutation.mutate({
-              ...generalSettings,
-              telemetryEnabled: enabled,
-            })
-          }
           streamerMode={generalSettings.streamerMode}
           onStreamerModeChange={(enabled) =>
             updateGeneralSettingsMutation.mutate({
@@ -1301,6 +1271,10 @@ export function SettingsView() {
               streamerMode: enabled,
             })
           }
+        />
+        <CliSkillsSettingsSection />
+        <VoiceInputSettingsSection />
+        <DebugSettingsSection
           enabled={generalSettings.showDiagnosticEvents}
           disabled={
             systemConfigQuery.data === undefined ||

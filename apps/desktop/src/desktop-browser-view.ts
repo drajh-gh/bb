@@ -13,12 +13,7 @@ import {
 import {
   BB_DESKTOP_BROWSER_MAX_TITLE_LENGTH,
   BB_DESKTOP_BROWSER_MAX_URL_LENGTH,
-  bbDesktopBrowserEvaluateResultSchema,
-  bbDesktopBrowserPageMessageSchema,
   clampBbDesktopBrowserViewBounds,
-  type BbDesktopBrowserEvaluateRequest,
-  type BbDesktopBrowserEvaluateResult,
-  type BbDesktopBrowserPageMessage,
   type BbDesktopBrowserAttachRequest,
   type BbDesktopBrowserFindInPageRequest,
   type BbDesktopBrowserFindResult,
@@ -39,10 +34,6 @@ import {
 import type { AppCommandId, AppShortcutInput } from "@bb/domain";
 import {
   BB_DESKTOP_BROWSER_FIND_RESULT_CHANNEL,
-  BB_DESKTOP_BROWSER_GUEST_MESSAGE_CHANNEL,
-  BB_DESKTOP_BROWSER_PAGE_BRIDGE_KEY,
-  BB_DESKTOP_BROWSER_PAGE_MESSAGE_CHANNEL,
-  BB_DESKTOP_BROWSER_PAGE_WORLD_ID,
   BB_DESKTOP_BROWSER_OPEN_TAB_CHANNEL,
   BB_DESKTOP_BROWSER_FOCUSED_CHANNEL,
   BB_DESKTOP_BROWSER_SCOPED_OPEN_TAB_CHANNEL,
@@ -196,8 +187,7 @@ export type DesktopBrowserHostWebContentsPayload =
   | BbDesktopBrowserScopedOpenTabRequest
   | BbDesktopBrowserSnapshot
   | BbDesktopBrowserTabRef
-  | BbDesktopBrowserFindResult
-  | BbDesktopBrowserPageMessage;
+  | BbDesktopBrowserFindResult;
 
 export interface DesktopBrowserHostContentBounds {
   height: number;
@@ -230,7 +220,6 @@ interface DispatchDesktopBrowserAppCommandArgs {
 export interface CreateDesktopBrowserViewManagerArgs {
   dispatchAppCommand: (args: DispatchDesktopBrowserAppCommandArgs) => void;
   focusHostWebContents: (hostWebContentsId: number) => void;
-  pagePreloadPath: string | null;
   partition?: string;
   resolveAppCommand: (input: AppShortcutInput) => AppCommandId | null;
 }
@@ -310,9 +299,6 @@ export interface DesktopBrowserViewManager {
   stopFindInPage(
     args: HostScopedRequestArgs<BbDesktopBrowserStopFindInPageRequest>,
   ): void;
-  evaluate(
-    args: HostScopedRequestArgs<BbDesktopBrowserEvaluateRequest>,
-  ): Promise<BbDesktopBrowserEvaluateResult>;
   beginWindowResize(hostWindow: DesktopBrowserHostWindow): void;
   endWindowResize(hostWindow: DesktopBrowserHostWindow): void;
   prepareWindowReload(hostWindow: DesktopBrowserHostWindow): void;
@@ -325,31 +311,6 @@ function browserViewKey(
   tabId: string,
 ): string {
   return `${hostWindow.webContents.id}:${tabId}`;
-}
-
-const BB_DESKTOP_BROWSER_MAX_PAGE_MESSAGE_LENGTH = 1_000_000;
-
-const guestPageMessageSchema = bbDesktopBrowserPageMessageSchema.omit({
-  tabId: true,
-});
-
-export function browserPageEvaluationSource(
-  request: BbDesktopBrowserEvaluateRequest,
-): string {
-  const bridge =
-    request.world === "isolated"
-      ? `{ postMessage: (data) => globalThis[${JSON.stringify(BB_DESKTOP_BROWSER_PAGE_BRIDGE_KEY)}].postMessage(${JSON.stringify(request.channel)}, data) }`
-      : "null";
-  return [
-    "(async (bb) => {",
-    "  try {",
-    `    const json = JSON.stringify(await (${request.expression}\n));`,
-    "    return { ok: true, value: json === undefined ? null : JSON.parse(json) };",
-    "  } catch (error) {",
-    "    return { ok: false, error: error instanceof Error ? String(error.stack || error.message) : String(error) };",
-    "  }",
-    `})(${bridge})`,
-  ].join("\n");
 }
 
 function send(
@@ -423,7 +384,6 @@ export function createDesktopBrowserViewManager(
   args: CreateDesktopBrowserViewManagerArgs,
 ): DesktopBrowserViewManager {
   const partition = args.partition ?? BB_BROWSER_PARTITION;
-  const pagePreloadPath = args.pagePreloadPath;
   const entries = new Map<string, BrowserViewEntry>();
   const automationTabListeners = new Set<() => void>();
   const popupWindows = new Set<BrowserWindow>();
@@ -643,9 +603,9 @@ export function createDesktopBrowserViewManager(
     entry: BrowserViewEntry,
   ): void {
     const webContents = entry.webContents;
-    const key = browserViewKey(hostWindow, tabId);
 
     webContents.on("destroyed", () => {
+      const key = browserViewKey(hostWindow, tabId);
       if (entries.get(key) === entry) {
         destroyEntry(hostWindow, key);
       }
@@ -653,27 +613,6 @@ export function createDesktopBrowserViewManager(
     webContents.on("did-navigate", notifyAutomationTabs);
     webContents.on("did-navigate-in-page", notifyAutomationTabs);
     webContents.on("page-title-updated", notifyAutomationTabs);
-
-    if (pagePreloadPath !== null) {
-      webContents.ipc.on(
-        BB_DESKTOP_BROWSER_GUEST_MESSAGE_CHANNEL,
-        (_event, payload: unknown) => {
-          const parsed = guestPageMessageSchema.safeParse(payload);
-          if (
-            !parsed.success ||
-            JSON.stringify(parsed.data.data).length >
-              BB_DESKTOP_BROWSER_MAX_PAGE_MESSAGE_LENGTH
-          ) {
-            return;
-          }
-          send(hostWindow, BB_DESKTOP_BROWSER_PAGE_MESSAGE_CHANNEL, {
-            tabId,
-            channel: parsed.data.channel,
-            data: parsed.data.data,
-          });
-        },
-      );
-    }
 
     webContents.on("focus", () => {
       if (entry.suppressNextFocusNotification) {
@@ -850,7 +789,6 @@ export function createDesktopBrowserViewManager(
       webPreferences: {
         ...hardenedWebPreferences(tabPartition),
         backgroundThrottling: args.profile.kind === "personal",
-        ...(pagePreloadPath === null ? {} : { preload: pagePreloadPath }),
       },
     });
     const entry: BrowserViewEntry = {
@@ -1146,34 +1084,6 @@ export function createDesktopBrowserViewManager(
     focus({ hostWindow, tabId }) {
       withEntry({ hostWindow, tabId }, focusEntryWithoutNotifying);
     },
-    async evaluate({ hostWindow, request }) {
-      const entry = entries.get(browserViewKey(hostWindow, request.tabId));
-      if (!entry || entry.webContents.isDestroyed()) {
-        return { ok: false, error: "Browser tab is not available" };
-      }
-      if (request.world === "isolated" && pagePreloadPath === null) {
-        return { ok: false, error: "Browser page scripts are not available" };
-      }
-      const source = browserPageEvaluationSource(request);
-      try {
-        const result: unknown =
-          request.world === "main"
-            ? await entry.webContents.executeJavaScript(source)
-            : await entry.webContents.executeJavaScriptInIsolatedWorld(
-                BB_DESKTOP_BROWSER_PAGE_WORLD_ID,
-                [{ code: source }],
-              );
-        const parsed = bbDesktopBrowserEvaluateResultSchema.safeParse(result);
-        return parsed.success
-          ? parsed.data
-          : { ok: false, error: "Browser page script returned no result" };
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    },
     navigate({ hostWindow, request }) {
       withEntry({ hostWindow, tabId: request.tabId }, (entry) => {
         resetEntryRendererRecovery(entry);
@@ -1218,10 +1128,13 @@ export function createDesktopBrowserViewManager(
     },
     findInPage({ hostWindow, request }) {
       withEntry({ hostWindow, tabId: request.tabId }, (entry) => {
-        entry.activeFindRequestId = entry.webContents.findInPage(request.text, {
-          forward: request.forward,
-          findNext: request.newSession,
-        });
+        entry.activeFindRequestId = entry.webContents.findInPage(
+          request.text,
+          {
+            forward: request.forward,
+            findNext: request.newSession,
+          },
+        );
       });
     },
     stopFindInPage({ hostWindow, request }) {

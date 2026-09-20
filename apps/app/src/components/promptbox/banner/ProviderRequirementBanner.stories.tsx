@@ -17,12 +17,7 @@ const noop = () => {};
 
 function configureAction(displayName: string) {
   return (
-    <Button
-      type="button"
-      size="sm"
-      className="h-8 shrink-0 px-3"
-      onClick={noop}
-    >
+    <Button type="button" size="sm" className="h-8 shrink-0 px-3" onClick={noop}>
       Configure {displayName}
     </Button>
   );

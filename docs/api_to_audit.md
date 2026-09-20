@@ -1077,15 +1077,15 @@ answers when its provider is a user-installed CLI. The probes:
 itself when given absolute and executable, else the first `which`/`where`
 hit, null when absent; 5 s), `experimental_readCliVersion` (`<command>
 --version` with stdin closed, so CLIs that start a stdio server on unknown
-flags exit instead of hitting the timeout; the first version token on stdout
-or stderr, or null if it is invalid SemVer; 5 s),
+flags exit instead of hitting the timeout; the first `x.y.z[-pre]` on stdout
+or stderr; 5 s),
 `experimental_commandOutput` (any command's trimmed stdout+stderr or null on
 failure; 15 s), `experimental_versionFrom` (the first version token in a
-banner, or null if it is invalid SemVer), `experimental_npmLatestVersion` (`npm view <package> version`) and
+banner), `experimental_npmLatestVersion` (`npm view <package> version`) and
 `experimental_probeNpmGlobalPackage` (`npm prefix -g` as the global bin
 directory plus `npm list -g <package>` as the installed version). The
-decisions: `experimental_compareVersions` (SemVer precedence, ignoring build
-metadata; throws `TypeError` for invalid inputs), `experimental_npmGlobalInstallSource` (`npmGlobal` when
+decisions: `experimental_compareVersions` (numeric core, then a prerelease
+below its release), `experimental_npmGlobalInstallSource` (`npmGlobal` when
 the executable sits inside npm's global bin, `external` otherwise,
 `notInstalled` when absent) and `experimental_installationVerification` (an
 install verifies by existence; an update by reaching the latest version the
@@ -1107,12 +1107,9 @@ dist-tag and `doctor` parsing) beside them.
    self-diagnostics; a bridge whose CLI is slow to start (a JVM, a first-run
    download) cannot lengthen them. Decide whether the budgets become
    arguments before the signatures are a promise.
-2. **`compareVersions` uses `semver` precedence.** Numeric prerelease
-   identifiers compare numerically, text identifiers use ASCII order, and
-   build metadata does not affect precedence. Invalid inputs throw
-   `TypeError`. The comparison subpath is bundled into the SDK and plugins;
-   no consumer dependency is required. Confirm the throwing contract before
-   stabilization.
+2. **`compareVersions` is semver-shaped, not semver.** Build metadata and
+   four-part versions read as `0.0.0`; prereleases compare by locale string.
+   Decide whether a real semver parser is owed.
 3. **The npm helpers assume a global install.** `probeNpmGlobalPackage` and
    `npmGlobalInstallSource` model one layout (npm's global prefix); pnpm,
    volta and corepack shims read as `external`. Decide whether the source
@@ -2300,10 +2297,10 @@ options.
    registered services (a picker needs per-service model lists, which the
    contract does not carry yet).
 2. **Payload cap.** A plugin-served transcription travels as base64 inside one
-   host RPC call (32 MiB JSON input cap → 20 MB audio), below the 25 MB
-   the server-direct path accepts for long recordings. The daemon retains
-   its existing 32 MiB aggregate active-input budget. The alternative is a host
-   pull: the server stores the audio under a short-lived token and the call carries the token, so the host
+   host RPC call (8 MiB JSON cap → 5 MB audio), a regression from the 25 MB
+   the server-direct path accepts for long recordings (owner decision: keep
+   for now). The alternative is a host pull: the server stores the audio
+   under a short-lived token and the call carries the token, so the host
    worker fetches the bytes over the internal route instead of receiving
    them inline; decide whether that or a streamed path replaces the cap.
 3. **Failure vocabulary.** Confirm the six codes are enough for core's policy
@@ -2577,26 +2574,6 @@ controls without crowding the address field, whether ordering needs a user
 preference, and whether plugins need browser instance or environment identity
 instead of resolving it server-side from the thread and tab ids.
 
-## `ExperimentalPluginBrowserToolbarActionProps.experimental_page` (`@get-bb/plugin-sdk/app`)
-
-**What it does.** Gives a Browser toolbar action script access to its tab's
-top-level document without a CDP lease. `evaluate(expression, { world })` runs
-an expression through Electron `executeJavaScript` (`main`) or in BB's isolated
-world 1717 (`isolated`, the default), awaits it, and resolves the JSON-cloned
-value. Isolated-world expressions receive `bb.postMessage(data)`, backed by a
-Browser-tab preload that exposes the bridge only to that world; messages reach
-`onMessage` listeners scoped to the calling plugin id and tab. The value is
-`null` outside the desktop app.
-
-**Audit before stabilizing.** Decide whether any enabled plugin may evaluate in
-personal-profile tabs or whether this needs a user gesture, capability grant,
-or origin allowlist. Plugins share one isolated world, so a plugin can post on
-another plugin's channel; decide whether per-plugin worlds are required.
-Confirm message size and rate bounds, subframe support, behavior during
-navigation and renderer crashes, whether `evaluate` should time out while a
-page is still loading, and whether an SDK or `bb` CLI surface is needed for
-automation outside the toolbar component.
-
 ## `PluginMentionProviderRegistration.resolve().experimental_images` (`@get-bb/plugin-sdk`)
 
 **What it does.** Lets a mention provider resolve a picked composer mention to
@@ -2609,45 +2586,47 @@ providers need, the 50-image boundary is appropriate, and local image access
 should remain governed by the thread dispatch validator rather than an earlier
 plugin-specific check.
 
-## Composer mention removal and successful submission subscriptions
-
-`PluginComposerApi.experimental_removeMention({ provider, id })` removes all matching mentions owned by the calling plugin from the current unsent draft, deletes their label text, rebases other mentions, and preserves attachments. It does not delete server records or alter sent messages.
-
-`PluginComposerApi.experimental_onSubmitted(listener)` observes successful local thread-send, queue-create, and new-thread-create mutations in the matching composer scope. It returns an unsubscribe function; host teardown also disposes subscriptions. Failed requests, draft clearing, and editing an existing queued message do not notify. This is a local UI notification, not a cross-device server event.
-
-Before stabilization, audit side-chat and handoff scope routing, decide whether to include the submitted structured draft in notifications to distinguish annotations created while a request is pending, and verify disposal, failure restoration, mention rebasing, and callback failure isolation across every composer host.
-
-## `useComposer().experimental_submit` and dispatch `experimental_submission`
+## `useComposer().experimental_submit` (`@get-bb/plugin-sdk/app`)
 
 **What it does.** Runs the composer's own submit pipeline with the draft that
-is on screen, preserving attachments, @-mentions, and the execution and
-environment choices visible in a new-thread composer. `sendAt` schedules the
-submission. `experimental_data` carries opaque JSON to every message dispatch
-hook on the initial attempt in an `experimental_submission` envelope containing
-the calling plugin's id. Core validates JSON but does not persist or interpret
-it. Hooks run before operational core waits; a plugin-authored wait persists
-its owner through the queued row's existing `waitingOn` value. Backed host-side
-by an optional `submit` on the internal
-`PluginComposerHost`, supplied by the thread and new-thread composers. Rejects
-with a user-presentable message when the composer cannot submit and restores
-the draft after request failure. Consumers: `plugins/scheduled-send` and
-`plugins/drafts`.
+is on screen, queueing the result until `sendAt` instead of dispatching it.
+In a thread composer that is a queued row waiting on the clock; in the
+new-thread composer the thread is created `pending` and its first message is
+the queued row, so nothing provisions until the row comes due. The point is
+that everything the user selected travels with the
+submission — attachments, @-mentions, and for a create the provider, model,
+reasoning level, service tier, permission mode and environment — none of
+which is reachable from a plugin backend, so a
+plugin-issued `threads.send`/`threads.spawn` would silently schedule a
+different message from the one being composed. Backed host-side by an optional
+`submit` on the internal `PluginComposerHost`, supplied by the thread
+composer (`ThreadDetailPromptArea`) and the new-thread composer
+(`NewThreadComposer`) and omitted everywhere else. Rejects with a
+user-presentable message when the composer refuses; request failures reject
+too, after the host has restored the draft. Sole consumer:
+`plugins/scheduled-send`.
 
 **Audit before stabilizing.**
 
-1. **Programmatic send authority.** `experimental_data` permits an immediate
-   submission without `sendAt`. Confirm which composer customizations should
-   receive that authority before stabilization.
+1. **Options is a one-field object with no "submit now" arm.** `sendAt` is
+   required, so the method can only schedule. That is deliberate — an
+   unconditional "send the user's draft" capability is a much larger surface
+   than scheduling needs — but confirm the shape before a second option
+   (`mode`, `senderThreadId`, a queue hint) has to be added, because adding one
+   makes `sendAt` optional and re-opens the "submit now" question.
 2. **Two of four scopes are unsupported.** A queued-message editor and a side
    chat have no `submit`, and the route-draft fallback (a plugin surface
    mounted outside any composer) has none either. All three reject with the
-   same "cannot submit programmatically" message, so a plugin cannot tell
+   same "cannot schedule a submission" message, so a plugin cannot tell
    "unsupported here" from "no composer mounted". Decide whether
    `ComposerView` should advertise submit capability so a `+` menu row can
    disable itself instead of failing on click.
-3. **Data visibility.** Every dispatch hook sees the envelope and its owner id,
-   not only the plugin that submitted it. Confirm that dispatch hooks remain
-   the right trust boundary for plugin-owned submission data.
+3. **Double error reporting on the create path.** A failed scheduled _send_
+   is reported only through the rejection (`useSendThreadMessage` sets
+   `showErrorToast: false`). A failed scheduled _create_ is also toasted by
+   the create mutation's default error handling, so the user sees the reason
+   twice — once in the plugin's picker and once in a toast. Decide whether the
+   host should suppress its toast for programmatic submissions.
 4. **Freshness of `sendAt`.** The host rejects a non-future `sendAt` at
    call time and the server accepts any non-negative timestamp, dispatching a
    past one inline at once. The only guard against a time that goes stale
@@ -2658,11 +2637,13 @@ the draft after request failure. Consumers: `plugins/scheduled-send` and
    a plugin cannot address the queued row it just created (to edit or delete
    it) without listing the thread's queue. Confirm whether the queued message
    id belongs in the result.
-6. **Plugin-hosted new-thread composers.** `sendAt` reaches a hosting plugin's
-   `onSubmit` and must be forwarded. The opaque submission envelope is currently
-   a core-host detail and is not part of `NewThreadRequest`, so another plugin's
-   `experimental_data` can be lost in that surface. Decide whether to expose a
-   forwardable experimental field or reject data-bearing submissions there.
+6. **`NewThreadRequest.sendAt`.** The same field is now visible to plugins
+   hosting `experimental_NewThreadComposer`: a scheduled submission there
+   reaches the plugin's `onSubmit` carrying `sendAt`, which the plugin must
+   forward to `threads.spawn`. A plugin that reconstructs the spawn request
+   field-by-field instead of forwarding it will drop the schedule silently.
+   Confirm that forwarding expectation is documented well enough, or make the
+   composer refuse to schedule when it is plugin-hosted.
 
 ## Desktop browser control
 
@@ -2983,40 +2964,6 @@ returns a credential only while that host is creating.
 Before stabilizing, verify creation cancellation through host removal,
 same-host restoration, serialized removal, plugin callers and UI/CLI parity.
 
-## Moving the server (`bb.sdk.experimental_server`, `hosts.experimental_deleteOldServerCopy`)
-
-`experimental_server.checkMove({ targetHostId, serverUrl })` returns the pre-move
-checklist (`ServerMoveCheckResponse`): blockers, warnings, whether a new server
-address is required, and any standalone bb data on the target that must be
-archived. `startMove({ targetHostId, serverUrl, stopRunningWork: true,
-archiveExistingTargetServerData })` freezes the server, stops running work,
-copies server-owned data to the target, starts the new server there, switches
-machines over, and retires this server process. `moveStatus()` returns the
-active move and the last completed move (`lastMove`). A move whose activation
-was never confirmed reports `recovery_required`: this server stays up and
-frozen until the target confirms (activation retry or `<serverUrl>/health`
-reporting ready). In direct mode the status carries `destinationStatusUrl`, the
-new server's CORS-readable `/health`, so a client can follow the destination
-after this server retires; it is null for bb connect. `cancelMove()` works
-until the switch starts, and in `recovery_required` it abandons the move and
-rolls the switch back. `export({ signal })` streams an unencrypted gzip server
-archive and returns its `fileName`, `body`, and the `sha256` digest the server
-sent. `hosts.experimental_deleteOldServerCopy({
-hostId })` deletes the locked old server data on that machine. All refuse
-requests authenticated by a machine credential. `checkMove`, `startMove`,
-`export`, and old-copy deletion also require the default-off `serverMove`
-experiment and otherwise fail with 403 `server_move_experiment_disabled`. The CLI equivalents are
-`bb server move|export|import|unlock|allow-connect|delete-old-copy`.
-
-Before stabilization, audit: authorization for plugin backends (`bb.sdk` runs
-with owner access, so a plugin can export every secret or move the server);
-the switch ordering against the bb connect tunnel and daemons that miss
-`server.moved`; archive size limits and streaming memory use; cancellation
-and failure recovery at every step, including a server restart mid-move;
-behavior when the target runs a provider-managed machine; and whether
-`startMove` should return immediately or expose progress through a durable
-operation id instead of the in-memory status.
-
 ## `app.experimental_icons.register` and `experimental_Icon`
 
 Plugins register inline React artwork during app setup with `{ name, component }`.
@@ -3080,25 +3027,3 @@ same-id isolation and legacy override fallback,
 asset-vs-glyph precedence, cross-plugin overrides, reload/error/recursion behavior,
 accessibility and theme rendering on desktop and mobile. Keep metadata fetching
 and plugin branding separate from provider artwork resolution.
-
-## `HostsArea.experimental_reconcile`
-
-Explicitly reconcile a provider-managed machine with core’s recorded state.
-For suspended machines, coordinate the existing provider suspension operation
-and return HTTP 202 after starting it; callers can poll host status for completion.
-Provider suspend and resume implementations must be idempotent.
-Active and transitional states are left unchanged;
-the plugin uses `experimental_suspend` to request a new pause. Core schedules
-no provider polling. Validate concurrent resume/removal, failure reporting,
-long-running caller behavior, and the scope of supported states before
-stabilizing this API. Exposed as `bb machine reconcile`.
-
-## Lifecycle ownership on thread creation
-
-`bb.sdk.threads.spawn` and `bb.sdk.threads.fork` accept `lifecycleOwnerThreadId`;
-thread responses expose its nullable value. This adds data fields to existing
-SDK methods, not a new `BbPluginApi` property, app export or slot method, so no
-new unprefixed public API member is introduced. Audit before stabilization:
-immutable cross-project ownership, cross-host cleanup, archive/delete retries,
-creation races, and preservation of existing unowned threads. The Plugin Guide SDK card
-describes the public behavior.

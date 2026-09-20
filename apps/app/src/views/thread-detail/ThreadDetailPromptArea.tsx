@@ -18,8 +18,6 @@ import {
 } from "@/components/promptbox/follow-up-placeholder";
 import { PERSONAL_PROJECT_ID } from "@bb/domain";
 import type {
-  PermissionMode,
-  ServiceTier,
   PendingInteraction,
   PromptInput,
   ThreadQueuedMessage,
@@ -32,11 +30,9 @@ import type {
 } from "@bb/domain";
 import type {
   PullRequestMergeMethod,
-  SendMessageRequest,
   ThreadTimelineResponse,
   TimelineWorkflowWorkRow,
 } from "@bb/server-contract";
-import type { ExperimentalComposerSubmitOptions } from "@get-bb/plugin-sdk";
 import type { ChildThreadPendingAttention } from "@/hooks/queries/child-thread-pending-interactions";
 import { ThreadPendingInteractionBanner } from "@/components/thread/pending-interactions/ThreadPendingInteractionBanner";
 import {
@@ -171,7 +167,7 @@ interface ThreadDetailPromptAreaProps {
   environmentMachineProvider?: MachineProviderPresentation | null;
   environmentIcon?: IconName;
   environmentLabel?: string;
-  environmentProviderName?: string;
+  environmentTypeLabel?: string;
   onCreateNewThreadInEnvironment?: () => void;
   onPullRequestDraft?: () => void;
   onPullRequestMerge?: (method: PullRequestMergeMethod) => void;
@@ -366,7 +362,7 @@ export function ThreadDetailPromptArea({
   environmentMachineProvider,
   environmentIcon,
   environmentLabel,
-  environmentProviderName,
+  environmentTypeLabel,
   onCreateNewThreadInEnvironment,
   onPullRequestDraft,
   onPullRequestMerge,
@@ -664,16 +660,7 @@ export function ThreadDetailPromptArea({
   const [overriddenFallbackIdentity, setOverriddenFallbackIdentity] = useState<
     string | null
   >(null);
-  const [handoffSourceSelection, setHandoffSourceSelection] = useState<{
-    threadId: string;
-    execution: ModelReasoningPickerHandoffSelection;
-    serviceTier: ServiceTier | undefined;
-    permissionMode: PermissionMode;
-    overriddenFallbackIdentity: string | null;
-  } | null>(null);
-  const isHandoffSelection = handoffSourceSelection?.threadId === thread.id;
   const isFallbackModelActive =
-    !isHandoffSelection &&
     selectedProviderId === thread.providerId &&
     modelFallback !== null &&
     overriddenFallbackIdentity !== fallbackIdentity;
@@ -689,6 +676,14 @@ export function ThreadDetailPromptArea({
     },
     [fallbackIdentity, setSelectedModel],
   );
+  const isHandoffProviderId = useCallback(
+    (providerId: string) =>
+      providerId.length > 0 &&
+      providerId !== thread.providerId &&
+      providerOptions.some((option) => option.value === thread.providerId),
+    [providerOptions, thread.providerId],
+  );
+  const isHandoffSelection = isHandoffProviderId(selectedProviderId);
   const sourceThreadDisplayTitle = getThreadDisplayTitle({
     id: thread.id,
     title: thread.title,
@@ -708,66 +703,26 @@ export function ThreadDetailPromptArea({
       thread.projectId,
     ],
   );
-  const beginHandoff = useCallback(() => {
-    setHandoffSourceSelection((current) =>
-      current?.threadId === thread.id
-        ? current
-        : {
-            threadId: thread.id,
-            execution: {
-              providerId: thread.providerId,
-              model: effectiveSelectedModel,
-              reasoningLevel,
-            },
-            serviceTier,
-            permissionMode,
-            overriddenFallbackIdentity,
-          },
-    );
-    const currentDraft = promptDraft.getCurrent();
-    const seededDraft = buildThreadHandoffFollowUpDraft(
-      handoffSeed,
-      currentDraft,
-    );
-    if (seededDraft !== currentDraft) {
-      promptDraft.setDraft(seededDraft);
-    }
-  }, [
-    effectiveSelectedModel,
-    handoffSeed,
-    overriddenFallbackIdentity,
-    permissionMode,
-    promptDraft,
-    reasoningLevel,
-    serviceTier,
-    thread.id,
-    thread.providerId,
-  ]);
-  const exitHandoff = useCallback(() => {
-    if (handoffSourceSelection?.threadId !== thread.id) return;
-    setProviderModelReasoning(handoffSourceSelection.execution);
-    setServiceTier(handoffSourceSelection.serviceTier);
-    setPermissionMode(handoffSourceSelection.permissionMode);
-    setOverriddenFallbackIdentity(
-      handoffSourceSelection.overriddenFallbackIdentity,
-    );
-    setHandoffSourceSelection(null);
-    const restoredDraft = stripThreadHandoffPrefix(
-      handoffSeed,
-      promptDraft.getCurrent(),
-    );
-    if (restoredDraft !== null) {
-      promptDraft.setDraft(restoredDraft);
-    }
-  }, [
-    handoffSeed,
-    handoffSourceSelection,
-    promptDraft,
-    setPermissionMode,
-    setProviderModelReasoning,
-    setServiceTier,
-    thread.id,
-  ]);
+  const syncHandoffDraft = useCallback(
+    (nextProviderId: string) => {
+      const currentDraft = promptDraft.getCurrent();
+      if (isHandoffProviderId(nextProviderId)) {
+        const seededDraft = buildThreadHandoffFollowUpDraft(
+          handoffSeed,
+          currentDraft,
+        );
+        if (seededDraft !== currentDraft) {
+          promptDraft.setDraft(seededDraft);
+        }
+        return;
+      }
+      const restoredDraft = stripThreadHandoffPrefix(handoffSeed, currentDraft);
+      if (restoredDraft !== null) {
+        promptDraft.setDraft(restoredDraft);
+      }
+    },
+    [handoffSeed, isHandoffProviderId, promptDraft],
+  );
   const handleProviderChange = useCallback(
     (providerId: string) => {
       if (providerId === selectedProviderId) {
@@ -776,20 +731,25 @@ export function ThreadDetailPromptArea({
       if (fallbackIdentity !== null) {
         setOverriddenFallbackIdentity(fallbackIdentity);
       }
-      beginHandoff();
       setSelectedProviderId(providerId);
+      syncHandoffDraft(providerId);
     },
-    [fallbackIdentity, selectedProviderId, setSelectedProviderId, beginHandoff],
+    [
+      fallbackIdentity,
+      selectedProviderId,
+      setSelectedProviderId,
+      syncHandoffDraft,
+    ],
   );
   const handleHandoffSelect = useCallback(
     (selection: ModelReasoningPickerHandoffSelection) => {
       if (fallbackIdentity !== null) {
         setOverriddenFallbackIdentity(fallbackIdentity);
       }
-      beginHandoff();
       setProviderModelReasoning(selection);
+      syncHandoffDraft(selection.providerId);
     },
-    [beginHandoff, fallbackIdentity, setProviderModelReasoning],
+    [fallbackIdentity, setProviderModelReasoning, syncHandoffDraft],
   );
   useEffect(() => {
     if (isHandoffSelection) {
@@ -806,9 +766,16 @@ export function ThreadDetailPromptArea({
   const hasSentMessageEdit = sentMessageEdit !== undefined;
   useEffect(() => {
     if (hasSentMessageEdit && isHandoffSelection) {
-      exitHandoff();
+      setSelectedProviderId(thread.providerId);
+      syncHandoffDraft(thread.providerId);
     }
-  }, [hasSentMessageEdit, isHandoffSelection, exitHandoff]);
+  }, [
+    hasSentMessageEdit,
+    isHandoffSelection,
+    setSelectedProviderId,
+    syncHandoffDraft,
+    thread.providerId,
+  ]);
   const { typeaheadConfig, promptActions } = useComposerTypeahead({
     projectId: thread.projectId,
     mentionsProjectId: projectId,
@@ -917,17 +884,11 @@ export function ThreadDetailPromptArea({
   const compactPromptPlaceholder = getCompactFollowUpPromptPlaceholder(
     isStopRequested ? "stopping" : runtimeDisplayStatus,
   );
-  const submitProgrammaticallyRef = useRef<
-    (
-      options: ExperimentalComposerSubmitOptions,
-      pluginSubmission: SendMessageRequest["pluginSubmission"],
-    ) => Promise<void>
+  const submitScheduledRef = useRef<
+    (options: { sendAt: number }) => Promise<void>
   >(async () => {});
-  const submitProgrammaticallyThroughRef = useCallback(
-    (
-      options: ExperimentalComposerSubmitOptions,
-      pluginSubmission: SendMessageRequest["pluginSubmission"],
-    ) => submitProgrammaticallyRef.current(options, pluginSubmission),
+  const submitScheduledThroughRef = useCallback(
+    (options: { sendAt: number }) => submitScheduledRef.current(options),
     [],
   );
   const normalPluginComposerHost = useMemo<PluginComposerHost>(
@@ -938,7 +899,7 @@ export function ThreadDetailPromptArea({
       subscribeDraft: promptDraft.subscribe,
       setDraft: promptDraft.setDraft,
       focus: focusBottomPluginComposer,
-      submit: submitProgrammaticallyThroughRef,
+      submit: submitScheduledThroughRef,
     }),
     [
       focusBottomPluginComposer,
@@ -946,7 +907,7 @@ export function ThreadDetailPromptArea({
       promptDraft.setDraft,
       promptDraft.storageKey,
       promptDraft.subscribe,
-      submitProgrammaticallyThroughRef,
+      submitScheduledThroughRef,
       thread.id,
     ],
   );
@@ -982,12 +943,8 @@ export function ThreadDetailPromptArea({
   ]);
 
   const createHandoffThread = useCallback(
-    async (
-      submittedDraft: PromptDraftState,
-      sendAt?: number,
-      pluginSubmission?: SendMessageRequest["pluginSubmission"],
-    ) => {
-      const baseRequest = buildThreadHandoffCreateRequest({
+    async (submittedDraft: PromptDraftState, sendAt?: number) => {
+      const request = buildThreadHandoffCreateRequest({
         execution: {
           providerId: selectedProviderId,
           model: effectiveSelectedModel,
@@ -995,18 +952,15 @@ export function ThreadDetailPromptArea({
           serviceTier,
           supportsServiceTier,
           permissionMode,
+          executionInputSources,
         },
         draft: submittedDraft,
         seed: handoffSeed,
         ...(sendAt === undefined ? {} : { sendAt }),
       });
-      if (baseRequest === null) {
+      if (request === null) {
         return false;
       }
-      const request = {
-        ...baseRequest,
-        ...(pluginSubmission === undefined ? {} : { pluginSubmission }),
-      };
       const clearedSubmittedDraft =
         promptDraft.clearIfCurrentMatches(submittedDraft);
       setBottomAttachmentError(null);
@@ -1029,6 +983,7 @@ export function ThreadDetailPromptArea({
     [
       createThread,
       effectiveSelectedModel,
+      executionInputSources,
       handoffSeed,
       navigate,
       permissionMode,
@@ -1105,33 +1060,26 @@ export function ThreadDetailPromptArea({
     thread.id,
     runtimeDisplayStatus,
   ]);
-  const submitProgrammatically = useCallback(
-    async (
-      submitOptions: ExperimentalComposerSubmitOptions,
-      pluginSubmission: SendMessageRequest["pluginSubmission"],
-    ) => {
+  const submitScheduled = useCallback(
+    async ({ sendAt }: { sendAt: number }) => {
       if (isHandoffSelection) {
         if (effectiveSelectedModel.length === 0) {
           throw new Error("The selected model is still loading.");
         }
         let created = false;
         try {
-          created = await createHandoffThread(
-            promptDraft.getCurrent(),
-            submitOptions.sendAt,
-            pluginSubmission,
-          );
-        } catch (submitError) {
+          created = await createHandoffThread(promptDraft.getCurrent(), sendAt);
+        } catch (scheduleError) {
           throw new Error(
             getMutationErrorMessage({
-              error: submitError,
+              error: scheduleError,
               fallbackMessage: "Failed to create thread",
               lifecycleOperation: "create_thread",
             }),
           );
         }
         if (!created) {
-          throw new Error("Type a message before submitting it.");
+          throw new Error("Type a message before scheduling it.");
         }
         return;
       }
@@ -1145,19 +1093,13 @@ export function ThreadDetailPromptArea({
         execution: followUpExecutionSelection,
       });
       if (request === null) {
-        throw new Error("Type a message before submitting it.");
+        throw new Error("Type a message before scheduling it.");
       }
       const clearedSubmittedDraft =
         promptDraft.clearIfCurrentMatches(submittedDraft);
       setBottomAttachmentError(null);
       try {
-        await sendMessage.mutateAsync({
-          ...request,
-          ...(submitOptions.sendAt === undefined
-            ? {}
-            : { sendAt: submitOptions.sendAt }),
-          ...(pluginSubmission === undefined ? {} : { pluginSubmission }),
-        });
+        await sendMessage.mutateAsync({ ...request, sendAt });
       } catch (scheduleError) {
         if (clearedSubmittedDraft) {
           promptDraft.restoreIfEmpty(submittedDraft);
@@ -1165,7 +1107,7 @@ export function ThreadDetailPromptArea({
         throw new Error(
           getMutationErrorMessage({
             error: scheduleError,
-            fallbackMessage: "Failed to submit message",
+            fallbackMessage: "Failed to schedule message",
             lifecycleOperation: "send_message",
           }),
         );
@@ -1184,8 +1126,8 @@ export function ThreadDetailPromptArea({
     ],
   );
   useEffect(() => {
-    submitProgrammaticallyRef.current = submitProgrammatically;
-  }, [submitProgrammatically]);
+    submitScheduledRef.current = submitScheduled;
+  }, [submitScheduled]);
 
   const handleModifierSubmit = useCallback(async () => {
     if (!canSubmitModifierShortcut) {
@@ -1432,9 +1374,6 @@ export function ThreadDetailPromptArea({
       },
       handoff: {
         sourceProviderId: thread.providerId,
-        active: isHandoffSelection,
-        onStart: beginHandoff,
-        onExit: exitHandoff,
         onSelect: handleHandoffSelect,
       },
     }),
@@ -1443,9 +1382,6 @@ export function ThreadDetailPromptArea({
       executionOptionsRouting,
       hasMultipleProviders,
       handleHandoffSelect,
-      beginHandoff,
-      isHandoffSelection,
-      exitHandoff,
       handleModelChange,
       handleProviderChange,
       isLoadingModels,
@@ -1535,7 +1471,7 @@ export function ThreadDetailPromptArea({
           environmentCompactLabel={environmentCompactLabel}
           environmentHost={environmentHost}
           environmentIcon={environmentIcon}
-          environmentProviderName={environmentProviderName}
+          environmentTypeLabel={environmentTypeLabel}
           environmentMachineProvider={environmentMachineProvider}
           environmentCheckout={environmentCheckout}
           onCreateNewThreadInEnvironment={onCreateNewThreadInEnvironment}
@@ -1548,7 +1484,7 @@ export function ThreadDetailPromptArea({
       environmentIcon,
       environmentLabel,
       environmentMachineProvider,
-      environmentProviderName,
+      environmentTypeLabel,
       onCreateNewThreadInEnvironment,
       projectName,
       thread.environmentId,

@@ -13,7 +13,7 @@ interface ProviderPromptAction {
 }
 
 interface ProviderPromptActionProps {
-  skillsTriggers: readonly PromptMentionCommandTrigger[];
+  skillsTrigger: PromptMentionCommandTrigger | null;
   promptActions: readonly ProviderPromptAction[];
 }
 
@@ -21,18 +21,16 @@ export function buildProviderPromptActionProps(
   composerActions: readonly ProviderComposerAction[],
 ): ProviderPromptActionProps {
   const promptActions: ProviderPromptAction[] = [];
-  const skillsTriggers: PromptMentionCommandTrigger[] = [];
+  let skillsTrigger: PromptMentionCommandTrigger | null = null;
 
   for (const action of composerActions) {
     switch (action.kind) {
       case "skills":
-        skillsTriggers.push(action.trigger);
-        if (!promptActions.some((candidate) => candidate.kind === "skills")) {
-          promptActions.push({
-            kind: action.kind,
-            text: action.trigger,
-          });
-        }
+        skillsTrigger = action.trigger;
+        promptActions.push({
+          kind: action.kind,
+          text: action.trigger,
+        });
         break;
       case "goal":
       case "plan":
@@ -45,7 +43,7 @@ export function buildProviderPromptActionProps(
     }
   }
 
-  return { skillsTriggers, promptActions };
+  return { skillsTrigger, promptActions };
 }
 
 function serializedProviderCommand(command: ProviderComposerCommand): string {

@@ -116,39 +116,6 @@ describe("public ui preferences", () => {
     });
   });
 
-  it("defaults unset organization to Custom without persisting a choice", async () => {
-    await withTestHarness(async (harness) => {
-      expect(await readJson(await listPreferences(harness))).toMatchObject({
-        preferences: {
-          "sidebar.organizationMode": { revision: 0, value: "chronological" },
-        },
-      });
-      expect(
-        harness.db.$client
-          .prepare("SELECT key FROM ui_preferences WHERE key = ?")
-          .get("sidebar.organizationMode"),
-      ).toBeUndefined();
-    });
-  });
-
-  it.each(["project", "machine", "chronological"])(
-    "preserves saved %s organization",
-    async (value) => {
-      await withTestHarness(async (harness) => {
-        harness.db.$client
-          .prepare(
-            "INSERT INTO ui_preferences (key, value_json, revision, updated_at) VALUES (?, ?, 3, 1)",
-          )
-          .run("sidebar.organizationMode", JSON.stringify(value));
-        expect(await readJson(await listPreferences(harness))).toMatchObject({
-          preferences: {
-            "sidebar.organizationMode": { revision: 3, value },
-          },
-        });
-      });
-    },
-  );
-
   it("writes with revision checks, broadcasts, and rejects stale writes", async () => {
     await withTestHarness(async (harness) => {
       const notifySystem = vi.spyOn(harness.hub, "notifySystem");
@@ -267,7 +234,7 @@ describe("public ui preferences", () => {
       };
       expect(listed.preferences["sidebar.organizationMode"]).toEqual({
         revision: 4,
-        value: "chronological",
+        value: "project",
       });
       expect(listed.preferences["sidebar.unknownKey"]).toBeUndefined();
     });

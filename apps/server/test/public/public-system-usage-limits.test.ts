@@ -84,7 +84,6 @@ describe("GET /api/v1/system/usage-limits", () => {
               permissionModes: ["full"],
             },
             composerActions: [],
-            completedTurnDisplay: "collapse",
           },
           serverCapabilities: {
             reasoningLevels: ["medium"],

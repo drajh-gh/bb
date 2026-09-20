@@ -658,15 +658,32 @@ export function Overview() {
         >
           <ProjectlessThreadRow />
         </StoryRow>
+      </StoryCard>
+    </ModelPickerStoryQueryProvider>
+  );
+}
+
+export function UnsupportedCodexCli() {
+  return (
+    <ModelPickerStoryQueryProvider>
+      <StoryCard>
         <StoryRow
-          label="mobile width"
-          hint="the projectless composer constrained to a 390px viewport"
+          label="unsupported Codex CLI"
+          hint="Codex is installed but below bb's minimum supported version"
         >
-          <div className="w-full max-w-[390px]">
-            <ProjectlessThreadRow />
-          </div>
+          <UnsupportedCodexCliRow />
         </StoryRow>
       </StoryCard>
+    </ModelPickerStoryQueryProvider>
+  );
+}
+
+export function Mobile() {
+  return (
+    <ModelPickerStoryQueryProvider>
+      <div className="mx-auto w-full max-w-[390px] p-4">
+        <ProjectlessThreadRow />
+      </div>
     </ModelPickerStoryQueryProvider>
   );
 }

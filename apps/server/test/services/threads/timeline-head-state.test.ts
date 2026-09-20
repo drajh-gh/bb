@@ -205,12 +205,10 @@ describe("timeline head state under a budgeted window", () => {
     seedThreadWithEarlyHeadState(db, thread, 12, 60);
 
     const unbudgeted = buildThreadTimelineWithProfile(db, thread, {
-      completedTurnDisplay: "collapse",
       ...baseOptions,
       eventBudget: 1_000_000,
     }).response;
     const budgeted = buildThreadTimelineWithProfile(db, thread, {
-      completedTurnDisplay: "collapse",
       ...baseOptions,
       eventBudget: 100,
     }).response;
@@ -259,7 +257,6 @@ describe("timeline head state under a budgeted window", () => {
     insertEvents(db, noopNotifier, events);
 
     const budgeted = buildThreadTimelineWithProfile(db, thread, {
-      completedTurnDisplay: "collapse",
       ...baseOptions,
       eventBudget: 100,
     }).response;

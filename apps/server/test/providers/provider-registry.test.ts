@@ -18,7 +18,6 @@ const CURSOR_LIKE_INFO = {
     permissionModes: ["full" as const],
   },
   composerActions: [],
-  completedTurnDisplay: "collapse" as const,
   displayName: "Plugin Provider",
   id: "plugin-provider",
   logoUrl: null,

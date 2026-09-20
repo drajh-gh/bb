@@ -7,7 +7,7 @@ import { sharedUiEnvSeam } from "../vite-shared-ui-seam.js";
 const repoRoot = path.resolve(__dirname, "../../..");
 const devInstance = resolveCurrentDevInstanceConfig(repoRoot);
 const trustedDevAppHeaders = {
-  origin: devInstance.serverUrl,
+  origin: `http://localhost:${devInstance.ports.appPort}`,
 };
 
 export default defineConfig({

@@ -148,19 +148,9 @@ export const BUILTIN_PLUGINS = [
     defaultEnabled: true,
   },
   {
-    name: "drafts",
-    pluginId: "drafts",
-    defaultEnabled: true,
-  },
-  {
     name: "scheduled-send",
     pluginId: "scheduled-send",
     defaultEnabled: true,
-  },
-  {
-    name: "agent-annotations",
-    pluginId: "agent-annotations",
-    defaultEnabled: false,
   },
   {
     name: "concurrency-limit",

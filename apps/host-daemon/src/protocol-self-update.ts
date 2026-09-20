@@ -142,7 +142,7 @@ function responseArtifactDigest(response: Response): string | null {
     : null;
 }
 
-export const defaultRunProcess: SelfUpdateProcessRunner = async (
+const defaultRunProcess: SelfUpdateProcessRunner = async (
   command,
   args,
   options,
@@ -153,7 +153,7 @@ export const defaultRunProcess: SelfUpdateProcessRunner = async (
 const BB_APP_ALLOW_SCRIPTS_ARG =
   "--allow-scripts=better-sqlite3,node-pty,@parcel/watcher";
 
-export async function defaultInstallTarball(
+async function defaultInstallTarball(
   tarballPath: string,
   runProcess: SelfUpdateProcessRunner,
 ): Promise<void> {

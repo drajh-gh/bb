@@ -1,29 +1,15 @@
 // oxlint-disable-next-line no-restricted-imports
-import { renameSync } from "node:fs";
-import { and, eq, isNull } from "drizzle-orm";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import {
-  getProjectAttachment,
-  recordProjectAttachment,
-  projectAttachments,
-  projectAttachmentBackfills,
-  attachmentUnavailable,
-  type DbConnection,
-  type ProjectAttachmentRow,
-} from "@bb/db";
-import {
-  canonicalProjectAttachmentPath,
-  pathLooksRuntimeReadable,
-} from "@bb/domain";
-// oxlint-disable-next-line no-restricted-imports
-import {
-  mkdir,
-  opendir,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
-import { basename, dirname, extname, join, resolve } from "node:path";
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  normalize,
+  resolve,
+  win32,
+} from "node:path";
 import { resolveContainedPath } from "@bb/process-utils";
 import type { PromptInput } from "@bb/domain";
 import type { UploadedPromptAttachment } from "@bb/server-contract";
@@ -46,7 +32,6 @@ type PromptAttachmentInput = Extract<
 >;
 
 interface ValidatePromptAttachmentReferencesArgs {
-  db: DbConnection;
   dataDir: string;
   input: PromptInput[];
   projectId: string;
@@ -73,16 +58,7 @@ function resolveAttachmentPath(
   attachmentDir: string,
   relativePath: string,
 ): string {
-  let normalizedRelativePath: string;
-  try {
-    normalizedRelativePath = canonicalProjectAttachmentPath(relativePath);
-  } catch (error) {
-    throw new ApiError(
-      400,
-      "invalid_request",
-      error instanceof Error ? error.message : "Invalid attachment path",
-    );
-  }
+  const normalizedRelativePath = normalize(relativePath.replaceAll("\\", "/"));
   const resolvedAttachmentDir = resolve(attachmentDir);
   const resolvedCandidatePath = resolve(
     resolvedAttachmentDir,
@@ -113,6 +89,14 @@ function resolveAttachmentPath(
   );
 }
 
+function pathLooksRuntimeReadable(rawPath: string): boolean {
+  return (
+    isAbsolute(rawPath) ||
+    win32.isAbsolute(rawPath) ||
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:/u.test(rawPath)
+  );
+}
+
 function shouldValidateProjectAttachmentReference(
   input: PromptInput,
 ): input is PromptAttachmentInput {
@@ -130,79 +114,16 @@ function missingAttachmentReferenceError(attachmentPath: string): ApiError {
   );
 }
 
-export async function ensureAttachmentReferenceExists(
-  db: DbConnection,
+async function ensureAttachmentReferenceExists(
   dataDir: string,
   projectId: string,
   attachmentPath: string,
 ): Promise<void> {
   const dir = projectAttachmentDir(dataDir, projectId);
   const resolved = resolveAttachmentPath(dir, attachmentPath);
-  const storedPath = canonicalProjectAttachmentPath(attachmentPath);
-  const existing = getProjectAttachment(db, projectId, storedPath);
-  if (
-    existing &&
-    (existing.deletionClaimedAt !== null || existing.readyAt === null)
-  )
-    throw attachmentUnavailable(storedPath);
-  if (!existing) {
-    const backfill = db
-      .select()
-      .from(projectAttachmentBackfills)
-      .where(eq(projectAttachmentBackfills.projectId, projectId))
-      .get();
-    if (backfill?.phase === "done")
-      throw missingAttachmentReferenceError(storedPath);
-  }
   const fileStat = await stat(resolved).catch(() => null);
-  if (!fileStat || !fileStat.isFile())
+  if (!fileStat || !fileStat.isFile()) {
     throw missingAttachmentReferenceError(attachmentPath);
-  if (!existing) {
-    recordProjectAttachment(db, {
-      projectId,
-      storedPath,
-      originalName: basename(storedPath),
-      mimeType: mimeTypes.lookup(storedPath) || null,
-      sizeBytes: fileStat.size,
-      createdAt: Math.floor(fileStat.mtimeMs),
-      readyAt: Date.now(),
-    });
-  }
-}
-
-export async function inventoryAttachmentReference(
-  db: DbConnection,
-  dataDir: string,
-  projectId: string,
-  attachmentPath: string,
-): Promise<void> {
-  const storedPath = canonicalProjectAttachmentPath(attachmentPath);
-  if (getProjectAttachment(db, projectId, storedPath)) return;
-  const resolved = resolveAttachmentPath(
-    projectAttachmentDir(dataDir, projectId),
-    storedPath,
-  );
-  const fileStat = await stat(resolved).catch(() => null);
-  if (!fileStat || !fileStat.isFile()) return;
-  recordProjectAttachment(db, {
-    projectId,
-    storedPath,
-    originalName: basename(storedPath),
-    mimeType: mimeTypes.lookup(storedPath) || null,
-    sizeBytes: fileStat.size,
-    createdAt: Math.floor(fileStat.mtimeMs),
-    readyAt: Date.now(),
-  });
-}
-
-export async function inventoryAttachmentReferences(
-  db: DbConnection,
-  dataDir: string,
-  projectId: string,
-  paths: readonly string[],
-): Promise<void> {
-  for (const storedPath of paths) {
-    await inventoryAttachmentReference(db, dataDir, projectId, storedPath);
   }
 }
 
@@ -214,7 +135,6 @@ export async function validatePromptAttachmentReferences(
       continue;
     }
     await ensureAttachmentReferenceExists(
-      args.db,
       args.dataDir,
       args.projectId,
       input.path,
@@ -228,7 +148,6 @@ function isHeifImageUpload(file: File): boolean {
 }
 
 export async function storeAttachment(
-  db: DbConnection,
   dataDir: string,
   projectId: string,
   file: File,
@@ -254,16 +173,9 @@ export async function storeAttachment(
   await mkdir(dir, { recursive: true });
 
   const storedName = buildStoredFilename(file.name);
+  const outputPath = join(dir, storedName);
   const bytes = Buffer.from(await file.arrayBuffer());
-  await writeInventoriedAttachment(
-    db,
-    dataDir,
-    projectId,
-    storedName,
-    bytes,
-    file.name,
-    file.type || null,
-  );
+  await writeFile(outputPath, bytes);
 
   return {
     type: isImage ? "localImage" : "localFile",
@@ -301,7 +213,6 @@ export async function readAttachment(
 }
 
 export async function copyProjectAttachments(
-  db: DbConnection,
   dataDir: string,
   sourceProjectId: string,
   targetProjectId: string,
@@ -311,25 +222,22 @@ export async function copyProjectAttachments(
     return;
   }
 
-  const uniquePaths = [
-    ...new Set(attachmentPaths.map(canonicalProjectAttachmentPath)),
-  ];
-  const attachments = [];
-  for (const path of uniquePaths) {
-    const { content } = await readAttachment(dataDir, sourceProjectId, path);
-    attachments.push({ path, content });
-  }
-  for (const { path, content } of attachments) {
-    await writeInventoriedAttachment(
-      db,
-      dataDir,
-      targetProjectId,
-      path,
-      content,
-      basename(path),
-      mimeTypes.lookup(path) || null,
-    );
-  }
+  const uniquePaths = [...new Set(attachmentPaths)];
+  const targetDir = projectAttachmentDir(dataDir, targetProjectId);
+  const attachments = await Promise.all(
+    uniquePaths.map(async (attachmentPath) => ({
+      content: (await readAttachment(dataDir, sourceProjectId, attachmentPath))
+        .content,
+      targetPath: resolveAttachmentPath(targetDir, attachmentPath),
+    })),
+  );
+
+  await Promise.all(
+    attachments.map(async ({ content, targetPath }) => {
+      await mkdir(dirname(targetPath), { recursive: true });
+      await writeFile(targetPath, content);
+    }),
+  );
 }
 
 export async function deleteProjectAttachments(
@@ -340,118 +248,4 @@ export async function deleteProjectAttachments(
     force: true,
     recursive: true,
   });
-}
-
-export function pendingAttachmentPath(
-  dataDir: string,
-  projectId: string,
-  id: string,
-): string {
-  return join(projectAttachmentDir(dataDir, projectId), ".pending", id);
-}
-
-async function writeInventoriedAttachment(
-  db: DbConnection,
-  dataDir: string,
-  projectId: string,
-  storedPath: string,
-  content: Buffer,
-  originalName: string,
-  mimeType: string | null,
-): Promise<void> {
-  const existing = getProjectAttachment(db, projectId, storedPath);
-  if (existing) {
-    await ensureAttachmentReferenceExists(db, dataDir, projectId, storedPath);
-    return;
-  }
-  const now = Date.now();
-  const row = recordProjectAttachment(db, {
-    projectId,
-    storedPath,
-    originalName,
-    mimeType,
-    sizeBytes: content.length,
-    createdAt: now,
-    readyAt: null,
-  });
-  const pendingPath = pendingAttachmentPath(dataDir, projectId, row.id);
-  const outputPath = resolveAttachmentPath(
-    projectAttachmentDir(dataDir, projectId),
-    storedPath,
-  );
-  try {
-    await mkdir(dirname(pendingPath), { recursive: true });
-    await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(pendingPath, content, { flag: "wx" });
-    db.transaction(
-      (tx) => {
-        const current = getProjectAttachment(tx, projectId, storedPath);
-        if (
-          !current ||
-          current.id !== row.id ||
-          current.deletionClaimedAt !== null ||
-          current.readyAt !== null
-        )
-          throw attachmentUnavailable(storedPath);
-        renameSync(pendingPath, outputPath);
-        tx.update(projectAttachments)
-          .set({ readyAt: Date.now() })
-          .where(eq(projectAttachments.id, row.id))
-          .run();
-      },
-      { behavior: "immediate" },
-    );
-  } catch (error) {
-    await rm(pendingPath, { force: true });
-    db.update(projectAttachments)
-      .set({ deletionClaimedAt: Date.now() })
-      .where(
-        and(
-          eq(projectAttachments.id, row.id),
-          isNull(projectAttachments.readyAt),
-        ),
-      )
-      .run();
-    throw error;
-  }
-}
-
-async function* walkFiles(root: string, prefix = ""): AsyncGenerator<string> {
-  const dir = await opendir(join(root, prefix)).catch((error: unknown) => {
-    if (error instanceof Error && "code" in error && error.code === "ENOENT")
-      return null;
-    throw error;
-  });
-  if (!dir) return;
-  for await (const entry of dir) {
-    if (prefix === "" && entry.name === ".pending") continue;
-    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) yield* walkFiles(root, path);
-    else if (entry.isFile()) yield path;
-    else throw new Error(`Attachment inventory cannot inspect ${path}`);
-  }
-}
-
-export function walkProjectAttachmentFiles(
-  dataDir: string,
-  projectId: string,
-): AsyncGenerator<string> {
-  return walkFiles(projectAttachmentDir(dataDir, projectId));
-}
-
-export async function deleteInventoriedAttachmentFiles(
-  dataDir: string,
-  attachment: ProjectAttachmentRow,
-): Promise<void> {
-  await rm(
-    resolveAttachmentPath(
-      projectAttachmentDir(dataDir, attachment.projectId),
-      attachment.storedPath,
-    ),
-    { force: true },
-  );
-  await rm(
-    pendingAttachmentPath(dataDir, attachment.projectId, attachment.id),
-    { force: true },
-  );
 }

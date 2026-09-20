@@ -1,5 +1,3 @@
-import { acquireProjectAttachmentOwnership } from "./project-attachments.js";
-import { projectAttachmentPaths } from "@bb/domain";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
   PROMPT_HISTORY_ENTRY_LIMIT,
@@ -52,36 +50,26 @@ export function createPromptHistoryEntry(
   db: DbQueryConnection,
   input: CreatePromptHistoryEntryInput,
 ): StoredPromptHistoryEntryRow {
-  return db.transaction(
-    (tx) => {
-      acquireProjectAttachmentOwnership(
-        tx,
-        input.threadId,
-        projectAttachmentPaths(input.input),
-      );
-      const createdAt = input.createdAt ?? Date.now();
-      return tx
-        .insert(promptHistoryEntries)
-        .values({
-          id: createPromptHistoryEntryId(),
-          projectId: input.projectId,
-          threadId: input.threadId,
-          scope: input.scope,
-          requestSequence: input.requestSequence,
-          input: JSON.stringify(input.input),
-          createdAt,
-        })
-        .returning({
-          createdAt: promptHistoryEntries.createdAt,
-          id: promptHistoryEntries.id,
-          input: promptHistoryEntries.input,
-          requestSequence: promptHistoryEntries.requestSequence,
-          threadId: promptHistoryEntries.threadId,
-        })
-        .get();
-    },
-    { behavior: "immediate" },
-  );
+  const createdAt = input.createdAt ?? Date.now();
+  return db
+    .insert(promptHistoryEntries)
+    .values({
+      id: createPromptHistoryEntryId(),
+      projectId: input.projectId,
+      threadId: input.threadId,
+      scope: input.scope,
+      requestSequence: input.requestSequence,
+      input: JSON.stringify(input.input),
+      createdAt,
+    })
+    .returning({
+      createdAt: promptHistoryEntries.createdAt,
+      id: promptHistoryEntries.id,
+      input: promptHistoryEntries.input,
+      requestSequence: promptHistoryEntries.requestSequence,
+      threadId: promptHistoryEntries.threadId,
+    })
+    .get();
 }
 
 export function listStoredProjectPromptHistoryRows(

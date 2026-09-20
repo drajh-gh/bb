@@ -4,9 +4,14 @@ import {
   type ServerResponse,
 } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { superviseFullStackProcesses } from "../src/launcher.js";
+import {
+  superviseFullStackProcesses,
+  terminateManagedFullStackProcesses,
+} from "../src/launcher.js";
 import type {
   BbAppStartContext,
+  DelayMillisecondsArgs,
+  FullStackSupervisionResult,
   ManagedFullStackProcesses,
   ManagedProcessName,
   ManagedProcessRun,
@@ -35,6 +40,12 @@ class FakeManagedProcessRun implements ManagedProcessRun {
     this.terminationSignals.push(signal);
     this.exitWith({ code: null, signal });
   }
+}
+
+function delay(ms: number): Promise<"timeout"> {
+  return new Promise((resolvePromise) => {
+    setTimeout(() => resolvePromise("timeout"), ms);
+  });
 }
 
 describe("full-stack supervisor port takeover", () => {
@@ -68,7 +79,10 @@ describe("full-stack supervisor port takeover", () => {
     const serverRun = new FakeManagedProcessRun("server");
     const daemonRun = new FakeManagedProcessRun("daemon");
     const processes: ManagedFullStackProcesses = { daemonRun, serverRun };
+    let shutdownRequested = false;
     let restartAttempts = 0;
+    let delayCalls = 0;
+    let releaseRetry = (): void => undefined;
     const context: BbAppStartContext = {
       appDistDir: "/tmp/bb-app-test/app/dist",
       appVersion: "0.0.0-test",
@@ -89,15 +103,15 @@ describe("full-stack supervisor port takeover", () => {
     };
     const supervision = superviseFullStackProcesses({
       context,
-      delayMilliseconds: async () => {
-        throw new Error("Unexpected server restart delay");
+      delayMilliseconds: async (_args: DelayMillisecondsArgs) => {
+        delayCalls += 1;
+        if (delayCalls === 1) return;
+        await new Promise<void>((resolvePromise) => {
+          releaseRetry = resolvePromise;
+        });
       },
-      isShutdownRequested: () => false,
-      onServerMoved: async () => {
-        throw new Error("Unexpected server move");
-      },
+      isShutdownRequested: () => shutdownRequested,
       processes,
-      readServerMovedFile: async () => null,
       startDaemon: async () => daemonRun,
       startServer: async () => {
         restartAttempts += 1;
@@ -106,10 +120,20 @@ describe("full-stack supervisor port takeover", () => {
     });
 
     serverRun.exitWith({ code: 1, signal: null });
-    const outcome = await supervision;
+    const outcome = await Promise.race<FullStackSupervisionResult | "timeout">([
+      supervision,
+      delay(250),
+    ]);
+    const observedRestartAttempts = restartAttempts;
+    const observedDaemonSignals = [...daemonRun.terminationSignals];
+
+    shutdownRequested = true;
+    releaseRetry();
+    await terminateManagedFullStackProcesses({ processes, signal: "SIGTERM" });
+    await supervision;
 
     expect(outcome).toBe("stopped");
-    expect(restartAttempts).toBe(0);
-    expect(daemonRun.terminationSignals).toEqual(["SIGTERM"]);
+    expect(observedRestartAttempts).toBe(0);
+    expect(observedDaemonSignals).toEqual(["SIGTERM"]);
   });
 });

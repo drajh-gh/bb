@@ -108,13 +108,6 @@ await Promise.all([
   }),
   build({
     ...commonOptions,
-    entryPoints: [resolve(packageRoot, "src", "browser-page-preload.ts")],
-    external: ["electron"],
-    format: "cjs",
-    outfile: resolve(distDir, "browser-page-preload.cjs"),
-  }),
-  build({
-    ...commonOptions,
     entryPoints: [resolve(packageRoot, "src", "log-viewer-preload.ts")],
     external: ["electron"],
     format: "cjs",

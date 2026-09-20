@@ -1,9 +1,6 @@
 import pRetry, { AbortError } from "p-retry";
-import { z } from "zod";
 import {
   HOST_DAEMON_PROTOCOL_VERSION,
-  SERVER_MOVED_ERROR_CODE,
-  serverMovedErrorDetailsSchema,
   hostDaemonEventBatchResponseSchema,
   hostDaemonInteractiveInterruptResponseSchema,
   hostDaemonInteractiveRequestResponseSchema,
@@ -41,23 +38,11 @@ interface JsonRecord {
   readonly [key: string]: unknown;
 }
 
-const serverMovedResponseDetailsSchema = z.object({
-  serverUrl: serverMovedErrorDetailsSchema.shape.serverUrl,
-  toHostName: serverMovedErrorDetailsSchema.shape.toHostName,
-  movedAt: serverMovedErrorDetailsSchema.shape.movedAt,
-  headers: z.record(z.string(), z.string()).optional(),
-});
-
-export type ServerMovedResponseDetails = z.infer<
-  typeof serverMovedResponseDetailsSchema
->;
-
 interface ApiErrorResponseBody {
   code: string;
   message: string;
   protocolUpdateRetryRequested: boolean;
   retryable?: boolean;
-  serverMoved: ServerMovedResponseDetails | null;
 }
 
 interface ServerResponseErrorArgs {
@@ -66,7 +51,6 @@ interface ServerResponseErrorArgs {
   code: string | null;
   protocolUpdateRetryRequested?: boolean;
   retryable: boolean;
-  serverMoved?: ServerMovedResponseDetails | null;
   status: number;
   statusText: string;
 }
@@ -77,7 +61,6 @@ export class ServerResponseError extends Error {
   readonly code: string | null;
   readonly protocolUpdateRetryRequested: boolean;
   readonly retryable: boolean;
-  readonly serverMoved: ServerMovedResponseDetails | null;
   readonly status: number;
   readonly statusText: string;
 
@@ -93,7 +76,6 @@ export class ServerResponseError extends Error {
     this.protocolUpdateRetryRequested =
       args.protocolUpdateRetryRequested ?? false;
     this.retryable = args.retryable;
-    this.serverMoved = args.serverMoved ?? null;
     this.status = args.status;
     this.statusText = args.statusText;
   }
@@ -130,10 +112,6 @@ function parseApiErrorResponseBody(text: string): ApiErrorResponseBody | null {
 
   const details = toJsonRecord(record.details);
   const protocolUpdateRetryRequested = details?.retryUpdate === true;
-  const serverMoved =
-    record.code === SERVER_MOVED_ERROR_CODE
-      ? (serverMovedResponseDetailsSchema.safeParse(details).data ?? null)
-      : null;
 
   if (typeof record.retryable === "boolean") {
     return {
@@ -141,7 +119,6 @@ function parseApiErrorResponseBody(text: string): ApiErrorResponseBody | null {
       message: record.message,
       protocolUpdateRetryRequested,
       retryable: record.retryable,
-      serverMoved,
     };
   }
 
@@ -149,7 +126,6 @@ function parseApiErrorResponseBody(text: string): ApiErrorResponseBody | null {
     code: record.code,
     message: record.message,
     protocolUpdateRetryRequested,
-    serverMoved,
   };
 }
 
@@ -209,10 +185,7 @@ export interface ServerClient {
     expectedByteLength: number;
   }): Promise<Uint8Array>;
   postEvents(events: HostDaemonEventEnvelope[]): Promise<EventPostResult>;
-  callTool(
-    request: ToolCallRequest,
-    signal?: AbortSignal,
-  ): Promise<HostDaemonToolCallResponse>;
+  callTool(request: ToolCallRequest): Promise<HostDaemonToolCallResponse>;
   registerInteractiveRequest(
     request: PendingInteractionCreate,
   ): Promise<HostDaemonInteractiveRequestResponse>;
@@ -449,7 +422,6 @@ export function createServerClient(
       code: body?.code ?? null,
       protocolUpdateRetryRequested: body?.protocolUpdateRetryRequested ?? false,
       retryable: body?.retryable ?? defaultRetryableForStatus(response.status),
-      serverMoved: body?.serverMoved ?? null,
       status: response.status,
       statusText: response.statusText,
     });
@@ -583,7 +555,6 @@ export function createServerClient(
 
     async callTool(
       request: ToolCallRequest,
-      signal?: AbortSignal,
     ): Promise<HostDaemonToolCallResponse> {
       const payload: HostDaemonToolCallRequest = {
         threadId: request.threadId,
@@ -597,7 +568,6 @@ export function createServerClient(
         sessionId: requireSessionId(),
       };
       const response = await fetchFn(buildInternalUrl("/session/tool-call"), {
-        signal,
         method: "POST",
         headers: headers(),
         body: JSON.stringify(payload),

@@ -49,7 +49,7 @@ interface OptionalServerFieldGroup {
   reason: string;
 }
 
-const OPTIONAL_SERVER_FIELD_GROUP_LIMIT = 31;
+const OPTIONAL_SERVER_FIELD_GROUP_LIMIT = 30;
 
 const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   {
@@ -58,7 +58,6 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
     fields: [
       "threadTimelineResponseSchema.timelinePage.contentPage",
       "threadTimelineResponseSchema.timelinePage.historySnapshot",
-      "threadTimelineResponseSchema.timelinePage.olderRowsSourceSeqEnd",
       "timelineTurnSummaryDetailsQuerySchema.beforeCursor",
     ],
   },
@@ -108,20 +107,10 @@ const OPTIONAL_SERVER_FIELD_GROUPS: readonly OptionalServerFieldGroup[] = [
   },
   {
     reason:
-      "Lifecycle ownership is explicitly assigned at creation; omission creates an independent thread.",
-    fields: [
-      "createThreadRequestSchema.lifecycleOwnerThreadId",
-      "forkThreadRequestSchema.lifecycleOwnerThreadId",
-    ],
-  },
-  {
-    reason:
-      'pluginMetadata is accepted only when origin is "plugin"; plugin submission data is present only for experimental composer submissions and queued payloads that preserve them.',
+      'pluginMetadata is accepted only when origin is "plugin" (enforced by refinement); omission seeds no plugin namespace.',
     fields: [
       "createThreadRequestSchema.pluginMetadata",
       "forkThreadRequestSchema.pluginMetadata",
-      "createThreadRequestSchema.pluginSubmission",
-      "sendMessageRequestSchema.pluginSubmission",
     ],
   },
   {
@@ -953,7 +942,6 @@ describe("server-contract canonical schemas", () => {
           status: "idle",
           parentThreadId: null,
           sourceThreadId: null,
-          lifecycleOwnerThreadId: null,
           originKind: null,
           originPluginId: null,
           visibility: "visible",
@@ -990,7 +978,6 @@ describe("server-contract canonical schemas", () => {
     ).toMatchObject([
       {
         id: "thr_123",
-        lifecycleOwnerThreadId: null,
         hasPendingInteraction: true,
         environmentHostId: "host_123",
         environmentName: null,

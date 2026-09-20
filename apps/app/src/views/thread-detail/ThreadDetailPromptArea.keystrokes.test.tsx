@@ -165,7 +165,7 @@ vi.mock("@/hooks/useCommandSuggestions", () => ({
     isLoadingMore: false,
     loadMore: vi.fn(),
     suggestions: [],
-    triggers: [],
+    trigger: null,
   }),
 }));
 

@@ -1299,21 +1299,12 @@ describe("useComposer", () => {
     await act(async () => {
       await captured!.experimental_submit({ sendAt });
     });
-    expect(submit).toHaveBeenCalledWith({ sendAt }, undefined);
-
-    const experimental_data = { kind: "draft" };
-    await act(async () => {
-      await captured!.experimental_submit({ experimental_data });
-    });
-    expect(submit).toHaveBeenLastCalledWith(
-      { experimental_data },
-      { pluginId: "demo", data: experimental_data },
-    );
+    expect(submit).toHaveBeenCalledWith({ sendAt });
 
     await expect(
       captured!.experimental_submit({ sendAt: Date.now() - 1 }),
     ).rejects.toThrow(/future/);
-    expect(submit).toHaveBeenCalledTimes(2);
+    expect(submit).toHaveBeenCalledTimes(1);
 
     view.unmount();
     render(
@@ -1322,9 +1313,9 @@ describe("useComposer", () => {
       </MemoryRouter>,
     );
     await expect(captured!.experimental_submit({ sendAt })).rejects.toThrow(
-      /cannot submit/,
+      /cannot schedule/,
     );
-    expect(submit).toHaveBeenCalledTimes(2);
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 });
 

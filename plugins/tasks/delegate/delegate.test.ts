@@ -1,4 +1,3 @@
-import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import {
   createFakePluginHost,
   makeThreadResponse,
@@ -8,35 +7,6 @@ import { createStore } from "../api";
 import type { Comment, Project, Task } from "../db";
 import { delegationRpcContract } from "./contract";
 import { buildSeedPrompt, registerDelegation } from ".";
-
-type ThreadListResult = Awaited<
-  ReturnType<BbPluginApi["sdk"]["threads"]["list"]>
->;
-
-function listedThread(
-  overrides: Parameters<typeof makeThreadResponse>[0],
-): ThreadListResult[number] {
-  return {
-    ...makeThreadResponse(overrides),
-    activity: {
-      activeWorkflowCount: 0,
-      activeBackgroundAgentCount: 0,
-      activeBackgroundCommandCount: 0,
-      activePlanModeCount: 0,
-      activeGoalCount: 0,
-    },
-    queuedWork: "none",
-    pinSortKey: null,
-    hasPendingInteraction: false,
-    environmentHostId: null,
-    environmentName: null,
-    environmentBranchName: null,
-    environmentPath: null,
-    environmentProviderId: null,
-    environmentIsWorktree: null,
-    environmentWorkspaceDisplayKind: "other",
-  };
-}
 
 function createTestPreset(
   store: ReturnType<typeof createStore>,
@@ -67,13 +37,6 @@ describe("task delegation", () => {
       pluginId: "tasks",
       sdk: {
         threads: {
-          list: async (): Promise<ThreadListResult> => [
-            listedThread({
-              id: "thr_operations",
-              title: "Haneda Operations",
-              pinnedAt: Date.now(),
-            }),
-          ],
           spawn: async () => ({ id: "thr_delegated" }),
           get: async () =>
             makeThreadResponse({ id: "thr_delegated", status: "starting" }),
@@ -119,8 +82,6 @@ describe("task delegation", () => {
           prompt: expect.stringContaining(
             "Run the focused tests before reporting back.",
           ),
-          visibility: "hidden",
-          parentThreadId: "thr_operations",
           origin: "plugin",
           originPluginId: "tasks",
         }),
@@ -529,205 +490,6 @@ describe("task thread detach", () => {
   });
 });
 
-describe("Operations routing", () => {
-  const operations = listedThread({
-    id: "thr_operations",
-    title: "Haneda Operations",
-    pinnedAt: 1,
-  });
-
-  it.each([
-    { name: "missing coordinator", threads: [], parent: null },
-    {
-      name: "unrelated pinned root",
-      threads: [{ ...operations, title: "Release review" }],
-      parent: null,
-    },
-    {
-      name: "multiple Operations roots",
-      threads: [operations, { ...operations, id: "thr_other" }],
-      parent: null,
-    },
-    {
-      name: "pinned child",
-      threads: [{ ...operations, parentThreadId: "thr_parent" }],
-      parent: null,
-    },
-    {
-      name: "unpinned Operations thread",
-      threads: [{ ...operations, pinnedAt: null }],
-      parent: null,
-    },
-    {
-      name: "named Operations among unrelated pins",
-      threads: [
-        { ...operations, id: "thr_review", title: "Review" },
-        operations,
-      ],
-      parent: "thr_operations",
-    },
-  ])(
-    "handles $name without misrouting the worker",
-    async ({ threads, parent }) => {
-      const { bb, harness } = createFakePluginHost({
-        pluginId: "tasks",
-        sdk: {
-          threads: {
-            list: async (): Promise<ThreadListResult> => threads,
-            spawn: async () => ({ id: "thr_worker" }),
-            get: async () => makeThreadResponse({ id: "thr_worker" }),
-          },
-        },
-      });
-      const store = createStore(bb);
-      const project = store.tasks.createProject({
-        name: "Routing",
-        prefix: "ROUTE",
-        color: "blue",
-        linkedBbProjectId: "proj_bb",
-      });
-      const task = store.tasks.createTask({
-        projectId: project.id,
-        title: "Route work",
-      });
-      registerDelegation(bb, store);
-      await harness.behavior.callRpc("delegate", {
-        taskId: task.id,
-        presetId: createTestPreset(store).id,
-      });
-      expect(harness.sdk.callsTo("threads.list")[0]).toEqual([
-        {
-          projectId: "proj_bb",
-          archived: false,
-          includeHidden: false,
-          hasParent: false,
-          limit: 100,
-          offset: 0,
-        },
-      ]);
-      const [spawn] = harness.sdk.callsTo("threads.spawn")[0]!;
-      expect(harness.sdk.callsTo("threads.spawn")).toHaveLength(1);
-      expect(harness.sdk.callsTo("threads.update")).toEqual([]);
-      expect(spawn).toMatchObject({ visibility: "hidden" });
-      if (parent === null) {
-        expect(spawn).not.toHaveProperty("parentThreadId");
-        expect(spawn).toHaveProperty(
-          "prompt",
-          expect.not.stringContaining("parent Operations thread"),
-        );
-      } else {
-        expect(spawn).toHaveProperty("parentThreadId", parent);
-        expect(spawn).toHaveProperty(
-          "prompt",
-          expect.stringContaining(`parent Operations thread ${parent}`),
-        );
-        expect(spawn).toHaveProperty(
-          "prompt",
-          expect.stringContaining(
-            "resume this same work when its receipt arrives",
-          ),
-        );
-      }
-      expect(store.tasks.listTaskThreads(task.id)[0]?.threadId).toBe(
-        "thr_worker",
-      );
-      await harness.lifecycle.dispose();
-    },
-  );
-
-  it.each([
-    "later coordinator",
-    "later ambiguity",
-    "lookup failure",
-    "page bound",
-  ])("handles %s", async (scenario) => {
-    const page = Array.from({ length: 100 }, (_, index) =>
-      listedThread({ id: `thr_${index}` }),
-    );
-    if (scenario === "later ambiguity" || scenario === "page bound")
-      page[0] = operations;
-    const { bb, harness } = createFakePluginHost({
-      pluginId: "tasks",
-      sdk: {
-        threads: {
-          list: async ({ offset } = {}): Promise<ThreadListResult> => {
-            if (scenario === "lookup failure") throw new Error("Unavailable");
-            if (scenario === "page bound")
-              return offset === 0
-                ? page
-                : page.map((thread) => ({ ...thread, pinnedAt: null }));
-            return offset === 0 ? page : [{ ...operations, id: "thr_later" }];
-          },
-          spawn: async () => ({ id: "thr_worker" }),
-          get: async () => makeThreadResponse({ id: "thr_worker" }),
-        },
-      },
-    });
-    const store = createStore(bb);
-    const project = store.tasks.createProject({
-      name: "Routing",
-      prefix: "ROUTE",
-      color: "blue",
-      linkedBbProjectId: "proj_bb",
-    });
-    const task = store.tasks.createTask({
-      projectId: project.id,
-      title: "Route work",
-    });
-    registerDelegation(bb, store);
-    await harness.behavior.callRpc("delegate", {
-      taskId: task.id,
-      presetId: createTestPreset(store).id,
-    });
-    const [spawn] = harness.sdk.callsTo("threads.spawn")[0]!;
-    expect(spawn).toHaveProperty("visibility", "hidden");
-    if (scenario === "later coordinator")
-      expect(spawn).toHaveProperty("parentThreadId", "thr_later");
-    else expect(spawn).not.toHaveProperty("parentThreadId");
-    expect(harness.sdk.callsTo("threads.list")).toHaveLength(
-      scenario === "page bound" ? 10 : scenario === "lookup failure" ? 1 : 2,
-    );
-    await harness.lifecycle.dispose();
-  });
-
-  it("attaches a direct user thread without changing visibility or parentage", async () => {
-    const direct = makeThreadResponse({
-      id: "thr_direct",
-      visibility: "visible",
-      parentThreadId: null,
-    });
-    const { bb, harness } = createFakePluginHost({
-      pluginId: "tasks",
-      sdk: { threads: { get: async () => direct } },
-    });
-    const store = createStore(bb);
-    const project = store.tasks.createProject({
-      name: "Direct",
-      prefix: "DIR",
-      color: "blue",
-    });
-    const task = store.tasks.createTask({
-      projectId: project.id,
-      title: "Direct work",
-    });
-    registerDelegation(bb, store);
-    await harness.behavior.callRpc("taskThreadsAttach", {
-      taskId: task.id,
-      threadId: direct.id,
-    });
-    expect(harness.sdk.calls).toHaveLength(1);
-    expect(harness.sdk.callsTo("threads.get")).toEqual([
-      [{ threadId: direct.id }],
-    ]);
-    expect(store.tasks.listTaskThreads(task.id)[0]?.threadId).toBe(direct.id);
-    expect(direct).toMatchObject({
-      visibility: "visible",
-      parentThreadId: null,
-    });
-    await harness.lifecycle.dispose();
-  });
-});
-
 describe("delegation seed prompt", () => {
   it("captures task context and the complete report-back contract", () => {
     const project: Project = {
@@ -804,7 +566,6 @@ describe("delegation seed prompt", () => {
         recentComments: comments,
         presetInstructions: "Prefer focused changes.",
         extraInstructions: "Run the backend gates.",
-        coordinatorThreadId: null,
       }),
     ).toMatchInlineSnapshot(`
       "# TASK-1 · Delegate work
@@ -841,7 +602,7 @@ describe("delegation seed prompt", () => {
 
       ## Report-back contract
 
-      You are working on task TASK-1. Continue through implementation, verification, compaction, and reporting until the authorized outcome reaches a terminal boundary; never ask the operator to say “continue.” Use the bb tasks CLI: comment substantive updates (bb tasks comment TASK-1 --body ...), attach result artifacts, set status when done (bb tasks update TASK-1 --status in_review) or explain blockage in a comment. Your thread is already attached to the task.
+      You are working on task TASK-1. Use the bb tasks CLI: comment substantive updates (bb tasks comment TASK-1 --body ...), attach result artifacts, set status when done (bb tasks update TASK-1 --status in_review) or explain blockage in a comment. Your thread is already attached to the task.
 
       ## Preset instructions
 

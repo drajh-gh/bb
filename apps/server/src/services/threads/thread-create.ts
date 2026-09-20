@@ -1,7 +1,6 @@
-import { requestThreadStorageDeletion } from "./thread-lifecycle.js";
 import { assertEnvironmentPathAvailable } from "../environments/path-admission.js";
 import {
-  markThreadDeleted,
+  deleteThread,
   getEnvironment,
   getProjectSourceByHost,
   getThread,
@@ -377,12 +376,6 @@ async function createPendingThreadAndAttemptFirstDispatch(
       : getEnvironment(deps.db, args.environmentId);
   if (environment !== null)
     assertEnvironmentPathAvailable(deps, { ...environment, threadId: null });
-  if (args.request.sourceThreadId) {
-    requireLiveSourceThread(deps, {
-      projectId: args.request.projectId,
-      sourceThreadId: args.request.sourceThreadId,
-    });
-  }
   const thread = createThreadRecord(deps, {
     request: args.request,
     environmentId: args.environmentId,
@@ -410,6 +403,7 @@ async function createPendingThreadAndAttemptFirstDispatch(
       args.request,
       executionPlanArgs,
     );
+
     const startContext: PendingThreadStartContext = {
       environmentIntent: args.environmentIntent,
       fork: args.fork?.descriptor ?? null,
@@ -446,7 +440,6 @@ async function createPendingThreadAndAttemptFirstDispatch(
       },
       source: { kind: "inline" },
       queuePayload: { kind: "inline" },
-      pluginSubmission: args.request.pluginSubmission ?? null,
       startContext,
       executionDefaults: executionPlanArgs,
       origin: args.request.origin,
@@ -460,17 +453,7 @@ async function createPendingThreadAndAttemptFirstDispatch(
       deletedAt: Date.now(),
       updatedAt: Date.now(),
     });
-    const deleted = markThreadDeleted(deps.db, deps.hub, {
-      threadId: thread.id,
-    });
-    if (deleted)
-      requestThreadStorageDeletion(
-        deps,
-        deleted,
-        deleted.environmentId
-          ? getEnvironment(deps.db, deleted.environmentId)
-          : null,
-      );
+    deleteThread(deps.db, deps.hub, thread.id);
     throw error;
   }
   rememberProjectExecutionDefaultsForCreate(deps, {
@@ -628,7 +611,6 @@ export async function createThreadFromRequest(
     }
   }
   await validatePromptAttachmentReferences({
-    db: deps.db,
     dataDir: deps.config.dataDir,
     input: requestInput.input,
     projectId: requestInput.projectId,

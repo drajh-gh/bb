@@ -66,12 +66,7 @@ describe("BranchPicker search", () => {
 
   it("keeps an empty result in the branches section", () => {
     render(
-      <BranchPicker
-        value={null}
-        options={[]}
-        onChange={vi.fn()}
-        modal={false}
-      />,
+      <BranchPicker value={null} options={[]} onChange={vi.fn()} modal={false} />,
     );
 
     fireEvent.click(screen.getByRole("combobox", { name: "Branch" }));

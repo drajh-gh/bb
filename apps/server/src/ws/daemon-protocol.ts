@@ -4,7 +4,6 @@ import { heartbeatSession } from "@bb/db";
 import {
   hasHostDaemonWebSocketProtocol,
   hostDaemonDaemonWsMessageSchema,
-  type HostDaemonDaemonWsMessage,
 } from "@bb/host-daemon-contract";
 import { ApiError } from "../errors.js";
 import { verifyAuthenticatedDaemon } from "../internal/auth.js";
@@ -26,11 +25,6 @@ import { requestQueuedMessageDispatch } from "../services/threads/queued-message
 import { runEventLoopWorkSync } from "../services/system/event-loop-work.js";
 import { parseSocketMessage } from "./decode-payload.js";
 import type { PluginService } from "../services/plugins/plugin-service.js";
-import type { ServerMoveCoordinator } from "../services/server-move/coordinator.js";
-import {
-  isServerMoveFrozen,
-  isServerMoveSnapshotFenced,
-} from "../services/server-move/freeze-state.js";
 import { resumeEnvironmentProvisioningForHost } from "../services/environments/environment-engine.js";
 
 interface DaemonSocket {
@@ -80,17 +74,6 @@ export async function validateDaemonWebSocket(
   };
 }
 
-export const SERVER_MOVE_FENCED_DAEMON_MESSAGE_TYPES: ReadonlySet<
-  HostDaemonDaemonWsMessage["type"]
-> = new Set([
-  "environment-metadata-change",
-  "desktop-browser.changed",
-  "plugin-host.signal",
-  "plugin-host.worker-exited",
-  "terminal.opened",
-  "terminal.exited",
-]);
-
 export function onDaemonSocketOpen(
   deps: LoggedPendingInteractionWorkSessionDeps &
     Pick<AppDeps, "hub" | "logger" | "sharedPorts" | "terminalSessions">,
@@ -102,15 +85,10 @@ export function onDaemonSocketOpen(
   );
   deps.hub.registerDaemon(args.sessionId, args.hostId, args.socket);
   deps.sharedPorts.pushCurrentSharedPortsForHost(args.hostId);
-  if (!isServerMoveSnapshotFenced(deps.db)) {
-    deps.terminalSessions.expireDisconnectedHostTerminals({
-      daemonSessionId: args.sessionId,
-      hostId: args.hostId,
-    });
-  }
-  if (isServerMoveFrozen(deps.db)) {
-    return;
-  }
+  deps.terminalSessions.expireDisconnectedHostTerminals({
+    daemonSessionId: args.sessionId,
+    hostId: args.hostId,
+  });
   // A dispatch that arrived while this machine was away parked its row on a
   // `host-offline` wait with no schedule, so no sweep can see it — the
   // machine coming back is that wait's release signal, and this socket
@@ -140,7 +118,6 @@ export function onDaemonSocketMessage(
   >,
   args: DaemonSocketMessageArgs,
   plugins?: Pick<PluginService, "handleHostSignal" | "handleHostWorkerExit">,
-  serverMove?: Pick<ServerMoveCoordinator, "handleProgress">,
 ): void {
   const message = parseSocketMessage(
     args.socket,
@@ -165,26 +142,6 @@ export function onDaemonSocketMessage(
           session.leaseExpiresAt + 1,
         ),
       );
-      if (
-        isServerMoveSnapshotFenced(deps.db) &&
-        SERVER_MOVE_FENCED_DAEMON_MESSAGE_TYPES.has(message.type)
-      ) {
-        if (message.type === "terminal.opened") {
-          deps.terminalSessions.refuseDaemonTerminalOpen({
-            message,
-            sessionId: args.sessionId,
-          });
-        }
-        deps.logger.debug(
-          {
-            hostId: args.hostId,
-            messageType: message.type,
-            sessionId: args.sessionId,
-          },
-          "Ignoring a daemon change while the server is moving",
-        );
-        return;
-      }
       if (message.type === "environment-change") {
         notifyDaemonEnvironmentChange(deps, {
           hostId: args.hostId,
@@ -263,10 +220,6 @@ export function onDaemonSocketMessage(
       }
       if (message.type === "environment.hook.progress") {
         reportEnvironmentHookProgress(deps, args.hostId, message);
-        return;
-      }
-      if (message.type === "server_move.progress") {
-        serverMove?.handleProgress(args.hostId, message);
         return;
       }
       if (message.type === "plugin-host.signal") {

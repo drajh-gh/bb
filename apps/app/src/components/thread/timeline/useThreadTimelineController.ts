@@ -10,7 +10,6 @@ import {
   mergeLoadedTimelineWithLatest,
   prependOlderTimelineRows,
   recoverLoadedTimelineAfterStaleCursor,
-  resolveLoadedTimelineSurfaceKey,
   type LoadedTimelineState,
 } from "@bb/client-core";
 import { useConnectionAwareQueryState } from "@/hooks/queries/connection-aware-query-state";
@@ -123,11 +122,14 @@ export function useThreadTimelineController({
     notifyOnChangeProps,
     refetchOnMount: true,
   });
+  const baseSurfaceKey = explicitSurfaceKey ?? threadId;
+  const contextBoundarySeq =
+    latestTimelineQuery.data?.contextBoundarySeq ?? null;
+  const surfaceKey =
+    contextBoundarySeq === null
+      ? baseSurfaceKey
+      : `${baseSurfaceKey}:context-boundary:${contextBoundarySeq}`;
   const latestTimeline = latestTimelineQuery.data;
-  const surfaceKey = resolveLoadedTimelineSurfaceKey(
-    explicitSurfaceKey ?? threadId,
-    latestTimeline,
-  );
   const [loadedTimelineTracker, setLoadedTimelineTracker] =
     useState<LoadedTimelineTracker>(() => ({
       latestTimeline,
@@ -188,16 +190,18 @@ export function useThreadTimelineController({
       updateLoadedTimeline((current) => {
         if (
           current.surfaceKey !== surfaceKey ||
-          !areTimelinePaginationCursorsEqual({
-            left: current.olderCursor,
-            right: nextOlderCursor,
-          })
+          current.historySnapshot !== response.timelinePage.historySnapshot
         ) {
           return current;
         }
         return {
           ...current,
-          olderCursor: response.timelinePage.olderCursor,
+          olderCursor: areTimelinePaginationCursorsEqual({
+            left: current.olderCursor,
+            right: nextOlderCursor,
+          })
+            ? response.timelinePage.olderCursor
+            : current.olderCursor,
           rows: prependOlderTimelineRows({
             loadedRows: current.rows,
             olderRows,
@@ -269,7 +273,7 @@ export function useThreadTimelineController({
     activeThinking: latestTimeline?.activeThinking ?? null,
     activeWorkflows: latestTimeline?.activeWorkflows ?? [],
     activeBackgroundCommands: latestTimeline?.activeBackgroundCommands ?? [],
-    contextBoundarySeq: latestTimeline?.contextBoundarySeq ?? null,
+    contextBoundarySeq,
     contextWindowUsage: latestTimeline?.contextWindowUsage,
     goal: latestTimeline?.goal ?? null,
     modelFallback: latestTimeline?.modelFallback ?? null,

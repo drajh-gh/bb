@@ -25,7 +25,6 @@ export interface ForkThreadCreateSeed {
 
 interface BuildForkThreadRequestArgs extends ForkThreadCreateSeed {
   input: PromptInput[];
-  pluginSubmission: AppCreateThreadRequest["pluginSubmission"];
   providerSupportsFork: boolean;
 }
 
@@ -50,7 +49,6 @@ export function buildForkThreadRequest({
   input,
   model,
   permissionMode,
-  pluginSubmission,
   projectId,
   providerId,
   providerSupportsFork,
@@ -69,7 +67,6 @@ export function buildForkThreadRequest({
     model,
     originKind: "fork",
     permissionMode,
-    ...(pluginSubmission === undefined ? {} : { pluginSubmission }),
     projectId,
     providerId,
     reasoningLevel,

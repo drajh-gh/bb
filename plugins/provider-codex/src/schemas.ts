@@ -539,14 +539,13 @@ const codexTurnErrorSchema = z
   })
   .passthrough();
 
-export const codexTurnSchema = z
+const codexTurnSchema = z
   .object({
     id: z.string(),
     status: codexTurnStatusSchema,
     error: codexTurnErrorSchema.nullable().optional(),
   })
   .passthrough();
-export type CodexTurn = z.infer<typeof codexTurnSchema>;
 
 const codexThreadSchema = z
   .object({
@@ -559,8 +558,7 @@ const codexTokenUsageBreakdownSchema = z
   .object({
     totalTokens: z.number(),
     inputTokens: z.number(),
-    cachedInputTokens: z.number().nonnegative(),
-    cacheWriteInputTokens: z.number().nonnegative().optional(),
+    cachedInputTokens: z.number(),
     outputTokens: z.number(),
     reasoningOutputTokens: z.number(),
   })

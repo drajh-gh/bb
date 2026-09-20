@@ -232,40 +232,6 @@ export interface PluginThreadHeaderActionProps {
   isCompactViewport: boolean;
 }
 
-/** JavaScript world a Browser page expression runs in. */
-export type ExperimentalPluginBrowserPageWorld = "isolated" | "main";
-
-export interface ExperimentalPluginBrowserPageEvaluateOptions {
-  /**
-   * `isolated` (default) runs in a BB-owned world that shares the page DOM but
-   * not page globals, and binds `bb.postMessage(data)`. `main` runs beside the
-   * page's own scripts, where `bb` is `null`.
-   */
-  world?: ExperimentalPluginBrowserPageWorld;
-}
-
-/**
- * Script access to the top-level document of one Browser tab. Independent of
- * CDP control leases: it never attaches a debugger or shows a control banner.
- */
-export interface ExperimentalPluginBrowserPage {
-  /**
-   * Evaluate a JavaScript expression and resolve its JSON-serialized value.
-   * Promises are awaited and `undefined` resolves to `null`. The expression
-   * can reference `bb`. Rejects when the tab is gone or the expression throws.
-   * Anything the expression installs is lost when the document navigates.
-   */
-  evaluate(
-    expression: string,
-    options?: ExperimentalPluginBrowserPageEvaluateOptions,
-  ): Promise<JsonValue>;
-  /**
-   * Subscribe to values this plugin's isolated-world scripts in this tab send
-   * with `bb.postMessage(data)`. Returns the unsubscribe function.
-   */
-  onMessage(listener: (data: JsonValue) => void): () => void;
-}
-
 export interface ExperimentalPluginBrowserToolbarActionProps {
   /** Thread that owns the Browser tab. */
   threadId: string;
@@ -275,8 +241,6 @@ export interface ExperimentalPluginBrowserToolbarActionProps {
   url: string;
   /** True when the Browser chrome needs compact controls. */
   isCompactViewport: boolean;
-  /** Script access to this tab's page; `null` outside the desktop app. */
-  experimental_page: ExperimentalPluginBrowserPage | null;
 }
 
 /**
@@ -2013,15 +1977,11 @@ export interface PluginComposerApi {
    * content should be fetched fresh when the message is sent.
    */
   insertMention(mention: PluginComposerMention): void;
-  /** Remove this plugin's matching mention pills and their text from the current draft. */
-  experimental_removeMention(mention: { provider: string; id: string }): void;
-  /** Subscribe to successful local submissions in this composer scope, including accepted queued messages. Failed sends and draft clearing do not notify. Dispose on unmount. */
-  experimental_onSubmitted(listener: () => void): () => void;
   /** Focus the composer caret at the end of the draft. */
   focus(): void;
   /**
    * Submit this composer's draft through the composer's OWN submit pipeline,
-   * optionally scheduling it or attaching plugin-owned dispatch data.
+   * queued until `sendAt` instead of dispatched now.
    *
    * This is a real submission, not a plugin-issued send: the host builds the
    * request exactly as pressing Enter would, so the draft's attachments and
@@ -2031,11 +1991,12 @@ export interface PluginComposerApi {
    * tuple itself, which is why sending from the backend instead would silently
    * run the message with different settings than the ones in front of the user.
    *
-   * `sendAt` queues the submission until that time. `experimental_data` is
-   * opaque JSON delivered to dispatch hooks together with the calling plugin's
-   * id on this initial attempt. Hooks run before operational core waits. If a
-   * hook queues the message, its existing plugin wait identifies the owner on
-   * later attempts; core does not persist or interpret the opaque data.
+   * In a thread composer the message is queued as a row instead of being
+   * sent or queued for the next idle moment. In the new-thread composer the
+   * thread is created `pending` and its first message becomes the queued row.
+   * Either way the resulting row is core's: the queued card above the
+   * composer, the countdown, Send now and Delete all work with no further
+   * plugin involvement.
    *
    * Resolves once the host has accepted the submission and cleared the draft.
    * Rejects when the composer refused to submit — a scope with no submit
@@ -2055,13 +2016,18 @@ export interface PluginComposerApi {
 /**
  * What `experimental_submit` does differently from pressing Enter.
  *
- * `experimental_data` is opaque JSON delivered to dispatch hooks. The runtime
- * associates it with the calling plugin automatically for the initial
- * dispatch attempt.
+ * There is deliberately no zero-argument overload and no "submit now" arm: a
+ * plugin that wants a draft sent immediately is asking for the affordance the
+ * user already has, and handing plugins an unconditional "send this draft"
+ * button is a much larger surface than scheduling needs.
  */
-export type ExperimentalComposerSubmitOptions =
-  | { sendAt: number; experimental_data?: JsonValue }
-  | { experimental_data: JsonValue; sendAt?: never };
+export interface ExperimentalComposerSubmitOptions {
+  /**
+   * Epoch ms the submission should dispatch at. Must be in the future; the
+   * host does not second-guess how far ahead it is.
+   */
+  sendAt: number;
+}
 
 // ---------------------------------------------------------------------------
 // ThreadChat — the host-owned chat component.
@@ -2391,13 +2357,7 @@ export interface NewThreadComposerProps {
    *   the original `default` submission would have created from.
    */
   defaultEnvironment?: CreateThreadEnvironmentArgs;
-  /**
-   * Seeds the draft, only while the draft is still empty. Serialized
-   * `@thread:<id>`, `@project:<id>`, and `@section:<id>` tokens become mention
-   * pills with host-resolved titles/names. Missing projects/sections use their
-   * IDs; unavailable generated thread IDs use "Unavailable thread" ("Thread"
-   * if lookup fails). Other unknown thread IDs use the ID as their label.
-   */
+  /** Seeds the draft, only while the draft is still empty. */
   initialPrompt?: string;
   placeholder?: string;
   /**
@@ -2533,8 +2493,7 @@ export interface BbNavigate {
   ): void;
   /**
    * Navigate to the root compose surface (the new-thread screen). Pass
-   * `initialPrompt` to seed the composer draft (serialized thread, project,
-   * and section mention tokens become pills) and `focusPrompt` to focus the
+   * `initialPrompt` to seed the composer draft and `focusPrompt` to focus the
    * composer on arrival — the pairing behind "Create via chat" style entry
    * points that drop the user into chat with a prefilled prompt.
    */

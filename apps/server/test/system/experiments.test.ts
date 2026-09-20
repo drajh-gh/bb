@@ -15,7 +15,6 @@ describe("experiments settings", () => {
         changelogPreview: false,
         mobileApp: false,
         multiMachinePicker: false,
-        serverMove: false,
         sidebarProgressiveDisclosure: false,
         timelineWindowing: false,
       });
@@ -31,7 +30,6 @@ describe("experiments settings", () => {
           changelogPreview: true,
           mobileApp: true,
           multiMachinePicker: true,
-          serverMove: true,
           sidebarProgressiveDisclosure: true,
           timelineWindowing: true,
         }),
@@ -41,7 +39,6 @@ describe("experiments settings", () => {
         changelogPreview: true,
         mobileApp: true,
         multiMachinePicker: true,
-        serverMove: true,
         sidebarProgressiveDisclosure: true,
         timelineWindowing: true,
       });
@@ -49,7 +46,6 @@ describe("experiments settings", () => {
         changelogPreview: true,
         mobileApp: true,
         multiMachinePicker: true,
-        serverMove: true,
         sidebarProgressiveDisclosure: true,
         timelineWindowing: true,
       });
@@ -61,7 +57,6 @@ describe("experiments settings", () => {
         changelogPreview: true,
         mobileApp: true,
         multiMachinePicker: true,
-        serverMove: true,
         sidebarProgressiveDisclosure: true,
         timelineWindowing: true,
       });
@@ -80,7 +75,6 @@ describe("experiments settings", () => {
           changelogPreview: false,
           mobileApp: false,
           multiMachinePicker: false,
-          serverMove: false,
           sidebarProgressiveDisclosure: false,
           timelineWindowing: false,
         }),

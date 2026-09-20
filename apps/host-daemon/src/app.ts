@@ -51,10 +51,6 @@ import {
 } from "@bb/host-watcher";
 import { PluginHostManager } from "./plugin-host-manager.js";
 import { writeMachineSuspensionMarker } from "./suspension-marker.js";
-import {
-  defaultServerMoveServiceOptions,
-  ServerMoveService,
-} from "./server-move/service.js";
 
 interface SessionState {
   value: string | null;
@@ -528,13 +524,12 @@ export async function createHostDaemonApp(
         watchError: error.message,
       });
     },
-    onToolCall: async (request, signal) => {
+    onToolCall: async (request) => {
       try {
         await flushThreadEvents();
-        signal?.throwIfAborted();
         return await runSessionRequest({
           source: "callTool",
-          request: () => serverClient.callTool(request, signal),
+          request: () => serverClient.callTool(request),
         });
       } catch (error) {
         options.logger.error(
@@ -724,30 +719,6 @@ export async function createHostDaemonApp(
     onChanged: (event) => sendServerMessage(event),
   });
 
-  let requestServerMoveShutdown = async (
-    _reason: string,
-    _exitCode: 0 | 1,
-  ): Promise<void> => undefined;
-  const serverMove = new ServerMoveService({
-    ...defaultServerMoveServiceOptions(),
-    dataDir: options.dataDir,
-    hostId: options.hostId,
-    serverUrl: options.serverUrl,
-    hostKey: options.hostKey,
-    serverHeaders: options.serverHeaders ?? {},
-    hostDaemonPort: options.localApiConfig?.port ?? null,
-    autoUpdate: options.autoUpdate ?? false,
-    logger: options.logger,
-    ...(options.fetchFn === undefined ? {} : { fetchFn: options.fetchFn }),
-    isServerSessionOpen: () => sessionState.value !== null,
-    getShellEnv: () => runtimeManager.getShellEnv(),
-    emitProgress: (message) => {
-      sendServerMessage(message);
-    },
-    requestShutdown: (reason, exitCode) =>
-      requestServerMoveShutdown(reason, exitCode),
-  });
-
   const router = new CommandRouter({
     emitEnvironmentHookProgress: (message) => sendServerMessage(message),
     desktopBrowserBroker,
@@ -789,7 +760,6 @@ export async function createHostDaemonApp(
       interactiveRequestRegistry.resolve(request);
     },
     ensureConnectTunnelIdentity: () => connectTunnel.ensureTunnelIdentity(),
-    serverMove,
     pluginHostManager,
     threadStorageRootPath,
     logger: options.logger,
@@ -818,7 +788,6 @@ export async function createHostDaemonApp(
     }),
     onSelfUpdateInstalled: () => requestDaemonRestart(),
     onMachineShutdown: () => requestMachineShutdown(),
-    onServerMoved: (notice) => serverMove.handleServerMoved(notice),
     onMachineEnvironment: (environment) =>
       machineEnvironment.replace(environment.entries),
     createWebSocket: options.createWebSocket,
@@ -958,14 +927,6 @@ export async function createHostDaemonApp(
     sendServerMessage({ type: "machine.shutdown-ack" });
     await daemon.shutdown("machine-shutdown", 0);
   };
-  requestServerMoveShutdown = (reason, exitCode) =>
-    daemon.shutdown(reason, exitCode);
-  void serverMove.resumeActivation().catch((error: unknown) => {
-    options.logger.error(
-      { ...runtimeErrorLogFields(error) },
-      "Failed to resume the server move activation",
-    );
-  });
   connection.setSessionCloseHandler((reason) =>
     daemon.shutdown(`session-close:${reason}`, 0),
   );

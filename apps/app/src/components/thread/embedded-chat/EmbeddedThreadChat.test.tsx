@@ -224,7 +224,7 @@ vi.mock("@/hooks/usePromptMentions", () => ({
 
 vi.mock("@/hooks/useCommandSuggestions", () => ({
   useCommandSuggestions: () => ({
-    triggers: [],
+    trigger: null,
     suggestions: [],
     isLoading: false,
     isError: false,

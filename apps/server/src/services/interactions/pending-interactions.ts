@@ -56,10 +56,6 @@ import {
   validatePendingInteractionResolution,
 } from "./pending-interaction-validation.js";
 import { emitPluginInteractionPending } from "../plugins/plugin-thread-events.js";
-import {
-  SERVER_MOVE_FROZEN_RETRY_MS,
-  isServerMoveFrozen,
-} from "../server-move/freeze-state.js";
 
 type RegisterPendingInteractionResult =
   | {
@@ -503,19 +499,13 @@ export class PendingInteractionLifecycle {
         });
       };
       args.signal?.addEventListener("abort", abort, { once: true });
-      const expire = () => {
-        const waiter = this.pluginWaiters.get(interaction.id);
-        if (waiter !== undefined && isServerMoveFrozen(this.deps.db)) {
-          waiter.timer = setTimeout(expire, SERVER_MOVE_FROZEN_RETRY_MS);
-          return;
-        }
+      const timer = setTimeout(() => {
         this.cancelPluginInteractionFromCallback({
           interactionId: interaction.id,
           threadId: interaction.threadId,
           reason: "timeout",
         });
-      };
-      const timer = setTimeout(expire, args.timeoutMs);
+      }, args.timeoutMs);
       this.pluginWaiters.set(interaction.id, {
         resolve,
         timer,
@@ -587,14 +577,6 @@ export class PendingInteractionLifecycle {
       throw new ApiError(400, "invalid_request", "Plugin interaction expected");
     }
     if (current.status !== "pending") throw buildResolveConflictError(current);
-    if (!this.pluginWaiters.has(current.id)) {
-      const interrupted = this.cancelPluginInteraction({
-        interactionId: current.id,
-        threadId: current.threadId,
-        reason: "request-aborted",
-      });
-      throw buildResolveConflictError(interrupted);
-    }
     const updated = setPendingInteractionResolved(this.deps.db, {
       id: current.id,
       resolution: JSON.stringify({ kind: "plugin_submitted" }),

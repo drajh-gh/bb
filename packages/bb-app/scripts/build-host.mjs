@@ -22,7 +22,6 @@ const hostDaemonSource = resolve(workspaceRoot, "apps", "host-daemon", "dist");
 const hostDaemonTarget = resolve(hostPackageRoot, "host-daemon", "dist");
 const dependencyNames = [
   "@parcel/watcher",
-  "fs-native-extensions",
   "node-pty",
   "pino",
   "pino-pretty",

@@ -194,12 +194,7 @@ it("resolves fresh setup values at dispatch without retaining them in the reques
       timeoutMs: 1000,
     });
     expect(request.mock.lastCall?.[0].message.command).toMatchObject({
-      contributedEnv: [
-        expect.objectContaining({
-          name: "SETUP_VALUE",
-          value: "refreshed-secret",
-        }),
-      ],
+      contributedEnv: [],
     });
   });
 });

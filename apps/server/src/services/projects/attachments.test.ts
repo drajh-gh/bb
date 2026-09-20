@@ -1,5 +1,3 @@
-import { createConnection, migrate, projects } from "@bb/db";
-import { beforeEach } from "vitest";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,22 +9,6 @@ import {
 } from "./attachments.js";
 
 const tempDirs: string[] = [];
-let db: ReturnType<typeof createConnection>;
-beforeEach(() => {
-  db = createConnection(":memory:");
-  migrate(db);
-  for (const id of ["proj_test", "proj_source", "proj_target"])
-    db.insert(projects)
-      .values({
-        id,
-        name: id,
-        kind: "standard",
-        sortKey: id,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      })
-      .run();
-});
 
 async function makeTempDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "bb-attachments-"));
@@ -35,7 +17,6 @@ async function makeTempDir(): Promise<string> {
 }
 
 afterEach(async () => {
-  db.$client.close();
   await Promise.all(
     tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })),
   );
@@ -62,7 +43,7 @@ describe("project attachments", () => {
     await mkdir(sourceDir, { recursive: true });
     await writeFile(join(sourceDir, "image-uploaded.png"), "image bytes");
 
-    await copyProjectAttachments(db, dataDir, "proj_source", "proj_target", [
+    await copyProjectAttachments(dataDir, "proj_source", "proj_target", [
       "image-uploaded.png",
     ]);
 
@@ -81,7 +62,7 @@ describe("project attachments", () => {
     await writeFile(join(sourceDir, "present.txt"), "present");
 
     await expect(
-      copyProjectAttachments(db, dataDir, "proj_source", "proj_target", [
+      copyProjectAttachments(dataDir, "proj_source", "proj_target", [
         "present.txt",
         "missing.txt",
       ]),
@@ -101,7 +82,6 @@ describe("project attachments", () => {
 
     await expect(
       validatePromptAttachmentReferences({
-        db,
         dataDir,
         projectId: "proj_test",
         input: [{ type: "localFile", path: "notes-uploaded.txt" }],
@@ -114,7 +94,6 @@ describe("project attachments", () => {
 
     await expect(
       validatePromptAttachmentReferences({
-        db,
         dataDir,
         projectId: "proj_test",
         input: [{ type: "localFile", path: "alpha.txt" }],
@@ -135,7 +114,6 @@ describe("project attachments", () => {
 
     await expect(
       validatePromptAttachmentReferences({
-        db,
         dataDir,
         projectId: "proj_test",
         input: [

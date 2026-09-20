@@ -6,10 +6,8 @@ import {
 } from "@bb/host-daemon-contract";
 import { z } from "zod";
 import {
-  bbDesktopBrowserEvaluateResultSchema,
   bbDesktopBrowserFindResultSchema,
   bbDesktopBrowserOpenTabRequestSchema,
-  bbDesktopBrowserPageMessageSchema,
   bbDesktopBrowserScopedOpenTabRequestSchema,
   bbDesktopBrowserTabRefSchema,
   bbDesktopBrowserSnapshotSchema,
@@ -25,7 +23,6 @@ import {
   type BbDesktopAppCommandHandler,
   type BbDesktopBrowserApi,
   type BbDesktopBrowserFindResultHandler,
-  type BbDesktopBrowserPageMessageHandler,
   type BbDesktopBrowserOpenTabHandler,
   type BbDesktopBrowserScopedOpenTabHandler,
   type BbDesktopBrowserFocusHandler,
@@ -78,8 +75,6 @@ import {
   BB_DESKTOP_BROWSER_LIST_IMPORT_SOURCES_CHANNEL,
   BB_DESKTOP_BROWSER_IMPORT_COOKIES_CHANNEL,
   BB_DESKTOP_BROWSER_OPEN_FULL_DISK_ACCESS_SETTINGS_CHANNEL,
-  BB_DESKTOP_BROWSER_EVALUATE_CHANNEL,
-  BB_DESKTOP_BROWSER_PAGE_MESSAGE_CHANNEL,
 } from "./desktop-browser-ipc.js";
 import {
   BB_DESKTOP_APP_COMMAND_CHANNEL,
@@ -194,8 +189,6 @@ const browserOpenTabListeners = new Set<BbDesktopBrowserOpenTabHandler>();
 const browserScopedOpenTabListeners =
   new Set<BbDesktopBrowserScopedOpenTabHandler>();
 const browserFocusListeners = new Set<BbDesktopBrowserFocusHandler>();
-const browserPageMessageListeners =
-  new Set<BbDesktopBrowserPageMessageHandler>();
 const browserSnapshotListeners = new Set<BbDesktopBrowserSnapshotHandler>();
 const browserFindResultListeners = new Set<BbDesktopBrowserFindResultHandler>();
 const closeWindowRequestListeners =
@@ -266,14 +259,6 @@ const bbBrowserApi: BbDesktopBrowserApi = {
   },
   onReveal(listener) {
     return addListener(browserRevealListeners, listener);
-  },
-  async evaluate(request) {
-    return bbDesktopBrowserEvaluateResultSchema.parse(
-      await ipcRenderer.invoke(BB_DESKTOP_BROWSER_EVALUATE_CHANNEL, request),
-    );
-  },
-  onPageMessage(listener) {
-    return addListener(browserPageMessageListeners, listener);
   },
   attach(request): void {
     ipcRenderer.send(BB_DESKTOP_BROWSER_ATTACH_CHANNEL, {
@@ -501,12 +486,6 @@ forwardParsed(
   BB_DESKTOP_BROWSER_SNAPSHOT_CHANNEL,
   bbDesktopBrowserSnapshotSchema,
   browserSnapshotListeners,
-);
-
-forwardParsed(
-  BB_DESKTOP_BROWSER_PAGE_MESSAGE_CHANNEL,
-  bbDesktopBrowserPageMessageSchema,
-  browserPageMessageListeners,
 );
 
 forwardParsed(

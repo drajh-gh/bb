@@ -26,7 +26,6 @@ interface ParcelWatcherProxyOptions {
   spawnChannel: () => ChildChannel;
   pingIntervalMs?: number;
   pingTimeoutMs?: number;
-  unsubscribeTimeoutMs?: number;
   baseRestartDelayMs?: number;
   maxRestartDelayMs?: number;
   log?: (
@@ -41,26 +40,11 @@ type SubscribeCallback = (
   events: ParcelWatcherEventBatch,
 ) => unknown;
 
-interface SubscribeConfirmation {
-  resolve: (subscription: ParcelAsyncSubscription) => void;
-  reject: (error: Error) => void;
-}
-
 interface SubscriptionRecord {
   id: string;
   dir: string;
   opts?: ParcelWatcherSubscribeOptions;
   callback: SubscribeCallback;
-  confirmation: SubscribeConfirmation | null;
-  requestSource: ChildChannel | null;
-  rescanSource: ChildChannel | null;
-  signal: AbortSignal | null;
-  abortListener: (() => void) | null;
-}
-
-interface PendingUnsubscribe {
-  resolve: () => void;
-  timer: ReturnType<typeof setTimeout>;
 }
 
 export interface ParcelWatcherProxy extends ParcelWatcherBackend {
@@ -69,7 +53,6 @@ export interface ParcelWatcherProxy extends ParcelWatcherBackend {
 
 const DEFAULT_PING_INTERVAL_MS = 5_000;
 const DEFAULT_PING_TIMEOUT_MS = 15_000;
-const DEFAULT_UNSUBSCRIBE_TIMEOUT_MS = 15_000;
 const DEFAULT_BASE_RESTART_DELAY_MS = 250;
 const DEFAULT_MAX_RESTART_DELAY_MS = 30_000;
 
@@ -84,8 +67,6 @@ export function createParcelWatcherProxy(
 ): ParcelWatcherProxy {
   const pingIntervalMs = options.pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS;
   const pingTimeoutMs = options.pingTimeoutMs ?? DEFAULT_PING_TIMEOUT_MS;
-  const unsubscribeTimeoutMs =
-    options.unsubscribeTimeoutMs ?? DEFAULT_UNSUBSCRIBE_TIMEOUT_MS;
   const baseRestartDelayMs =
     options.baseRestartDelayMs ?? DEFAULT_BASE_RESTART_DELAY_MS;
   const maxRestartDelayMs =
@@ -93,13 +74,12 @@ export function createParcelWatcherProxy(
   const log = options.log ?? (() => {});
 
   const subscriptions = new Map<string, SubscriptionRecord>();
-  const pendingUnsubscribes = new Map<string, PendingUnsubscribe>();
   let channel: ChildChannel | null = null;
   let childReady = false;
   let disposed = false;
   let consecutiveRestarts = 0;
   let respawnTimer: ReturnType<typeof setTimeout> | null = null;
-  let recoveryPending = false;
+  let restarting = false;
   let idCounter = 0;
   let pingNonce = 0;
   let lastPongAt = 0;
@@ -149,33 +129,19 @@ export function createParcelWatcherProxy(
     pingTimer.unref?.();
   }
 
-  function sendSubscribe(
-    target: ChildChannel,
-    record: SubscriptionRecord,
-    rescan: boolean,
-  ): void {
-    record.requestSource = target;
-    record.rescanSource = rescan ? target : null;
-    target.send({
-      kind: "subscribe",
-      id: record.id,
-      dir: record.dir,
-      opts: record.opts,
-      rescan,
-    });
-  }
-
-  function replaySubscriptions(): void {
+  function replaySubscriptions(rescan: boolean): void {
     const target = channel;
     if (target === null) {
       return;
     }
-    const rescan = recoveryPending;
     for (const record of subscriptions.values()) {
-      if (target !== channel) {
-        return;
-      }
-      sendSubscribe(target, record, rescan);
+      target.send({
+        kind: "subscribe",
+        id: record.id,
+        dir: record.dir,
+        opts: record.opts,
+        rescan,
+      });
     }
   }
 
@@ -194,7 +160,7 @@ export function createParcelWatcherProxy(
     if (disposed || channel !== null || respawnTimer !== null) {
       return;
     }
-    recoveryPending = true;
+    restarting = true;
     if (consecutiveRestarts === 0) {
       consecutiveRestarts += 1;
       startChild();
@@ -225,8 +191,6 @@ export function createParcelWatcherProxy(
     channel = null;
     childReady = false;
     stopPing();
-    releasePendingUnsubscribes();
-    releaseChildRequests(dying);
     dying.kill();
     scheduleRespawn();
   }
@@ -238,8 +202,6 @@ export function createParcelWatcherProxy(
     channel = null;
     childReady = false;
     stopPing();
-    releasePendingUnsubscribes();
-    releaseChildRequests(source);
     if (disposed) {
       return;
     }
@@ -259,10 +221,9 @@ export function createParcelWatcherProxy(
     switch (message.kind) {
       case "ready":
         childReady = true;
-        replaySubscriptions();
-        if (source === channel) {
-          startPing();
-        }
+        replaySubscriptions(restarting);
+        restarting = false;
+        startPing();
         break;
       case "pong":
         lastPongAt = Date.now();
@@ -290,166 +251,37 @@ export function createParcelWatcherProxy(
         });
         killAndRespawn();
         break;
-      case "subscribed": {
-        const record = subscriptions.get(message.id);
-        if (record?.rescanSource === source) {
-          record.rescanSource = null;
-          recoveryPending = false;
-        }
-        const confirmation = record?.confirmation ?? null;
-        if (record && confirmation) {
-          record.confirmation = null;
-          releaseAbortListener(record);
-          confirmation.resolve(createSubscriptionHandle(record.id));
-        }
-        break;
-      }
       case "subscribe-failed": {
         const record = subscriptions.get(message.id);
-        if (record) {
-          subscriptions.delete(message.id);
-          releaseAbortListener(record);
-          if (record.confirmation) {
-            record.confirmation.reject(new Error(message.message));
-          } else {
-            record.callback(new Error(RESCAN_REQUIRED_MESSAGE), []);
-          }
-        }
-        if (message.recovery === "recycle-child") {
-          log(
-            "warn",
-            "Watcher subscribe failed after adding native watches; recycling to release them",
-            {
-              activeSubscriptions: subscriptions.size,
-              watchError: message.message,
-            },
-          );
-          killAndRespawn();
-        }
+        record?.callback(new Error(RESCAN_REQUIRED_MESSAGE), []);
         break;
       }
-      case "unsubscribed": {
-        const pending = pendingUnsubscribes.get(message.id);
-        pendingUnsubscribes.delete(message.id);
-        if (pending) {
-          clearTimeout(pending.timer);
-          pending.resolve();
-        }
+      case "subscribed":
+      case "unsubscribed":
         break;
-      }
     }
-  }
-
-  function releasePendingUnsubscribes(): void {
-    const pending = [...pendingUnsubscribes.values()];
-    pendingUnsubscribes.clear();
-    for (const unsubscribe of pending) {
-      clearTimeout(unsubscribe.timer);
-      unsubscribe.resolve();
-    }
-  }
-
-  function releaseAbortListener(record: SubscriptionRecord): void {
-    if (record.signal && record.abortListener) {
-      record.signal.removeEventListener("abort", record.abortListener);
-    }
-    record.signal = null;
-    record.abortListener = null;
-  }
-
-  function releaseChildRequests(source: ChildChannel): void {
-    for (const record of subscriptions.values()) {
-      if (record.requestSource === source) {
-        record.requestSource = null;
-      }
-      if (record.rescanSource === source) {
-        record.rescanSource = null;
-      }
-    }
-  }
-
-  function cancelPendingSubscribe(record: SubscriptionRecord): void {
-    if (record.confirmation === null || !subscriptions.delete(record.id)) {
-      return;
-    }
-    const confirmation = record.confirmation;
-    const target = record.requestSource;
-    record.confirmation = null;
-    releaseAbortListener(record);
-    confirmation.reject(new Error("Parcel watcher subscription was cancelled"));
-    if (target !== null && target === channel) {
-      target.send({ kind: "unsubscribe", id: record.id });
-    }
-  }
-
-  function createSubscriptionHandle(id: string): ParcelAsyncSubscription {
-    return {
-      unsubscribe() {
-        const target = channel;
-        const record = subscriptions.get(id);
-        if (!record || !subscriptions.delete(id)) {
-          return Promise.resolve();
-        }
-        releaseAbortListener(record);
-        if (target === null || record.requestSource !== target) {
-          return Promise.resolve();
-        }
-        return new Promise<void>((resolve) => {
-          const timer = setTimeout(() => {
-            if (!pendingUnsubscribes.delete(id)) {
-              return;
-            }
-            resolve();
-            log("warn", "Watcher child unsubscribe timed out; recycling", {
-              unsubscribeTimeoutMs,
-            });
-            killAndRespawn();
-          }, unsubscribeTimeoutMs);
-          timer.unref?.();
-          pendingUnsubscribes.set(id, { resolve, timer });
-          target.send({ kind: "unsubscribe", id });
-        });
-      },
-    };
   }
 
   function subscribe(
     dir: string,
     callback: SubscribeCallback,
     opts?: ParcelWatcherSubscribeOptions,
-    signal?: AbortSignal,
   ): Promise<ParcelAsyncSubscription> {
     if (disposed) {
       return Promise.reject(new Error("Parcel watcher proxy is disposed"));
     }
-    if (signal?.aborted) {
-      return Promise.reject(
-        new Error("Parcel watcher subscription was cancelled"),
-      );
-    }
     const id = nextId();
-    return new Promise<ParcelAsyncSubscription>((resolve, reject) => {
-      const record: SubscriptionRecord = {
-        id,
-        dir,
-        opts,
-        callback,
-        confirmation: { resolve, reject },
-        requestSource: null,
-        rescanSource: null,
-        signal: signal ?? null,
-        abortListener: null,
-      };
-      if (signal) {
-        record.abortListener = () => cancelPendingSubscribe(record);
-        signal.addEventListener("abort", record.abortListener, { once: true });
-      }
-      subscriptions.set(id, record);
-      if (channel !== null && childReady) {
-        sendSubscribe(channel, record, recoveryPending);
-      } else if (channel === null && respawnTimer === null) {
-        startChild();
-      }
+    subscriptions.set(id, { id, dir, opts, callback });
+    if (channel !== null && childReady) {
+      channel.send({ kind: "subscribe", id, dir, opts, rescan: false });
+    } else if (channel === null && respawnTimer === null) {
+      startChild();
+    }
+    return Promise.resolve({
+      async unsubscribe() {
+        subscriptions.delete(id);
+        channel?.send({ kind: "unsubscribe", id });
+      },
     });
   }
 
@@ -460,14 +292,7 @@ export function createParcelWatcherProxy(
       clearTimeout(respawnTimer);
       respawnTimer = null;
     }
-    for (const record of subscriptions.values()) {
-      releaseAbortListener(record);
-      record.confirmation?.reject(
-        new Error("Parcel watcher proxy is disposed"),
-      );
-    }
     subscriptions.clear();
-    releasePendingUnsubscribes();
     if (channel !== null) {
       const dying = channel;
       channel = null;

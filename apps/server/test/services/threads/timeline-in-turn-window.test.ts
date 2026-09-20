@@ -402,7 +402,6 @@ function buildPage(
   segmentLimit = 20,
 ) {
   return buildThreadTimelineWithProfile(db, thread, {
-    completedTurnDisplay: "collapse",
     eventBudget,
     includeDiagnosticOperations: false,
     includeNestedRows: false,
@@ -421,7 +420,6 @@ function buildNestedPage(
   cursor: TimelinePaginationCursor | null,
 ) {
   return buildThreadTimelineWithProfile(db, thread, {
-    completedTurnDisplay: "collapse",
     eventBudget,
     includeDiagnosticOperations: false,
     includeNestedRows: true,
@@ -704,7 +702,6 @@ describe("in-turn timeline windows", () => {
     });
 
     const details = buildTimelineTurnSummaryDetails(db, thread, {
-      completedTurnDisplay: "collapse",
       includeDiagnosticOperations: false,
       sourceSeqEnd: turnRow.sourceSeqEnd,
       sourceSeqStart: turnRow.sourceSeqStart,
@@ -843,7 +840,6 @@ describe("in-turn timeline windows", () => {
         expect(row.id).not.toContain(":sequence-page:");
         turnRowIds.add(row.id);
         const details = buildTimelineTurnSummaryDetails(db, thread, {
-          completedTurnDisplay: "collapse",
           includeDiagnosticOperations: false,
           sourceSeqEnd: row.sourceSeqEnd,
           sourceSeqStart: row.sourceSeqStart,
@@ -946,7 +942,6 @@ describe("in-turn timeline windows", () => {
       throw new Error("expected a turn row");
     }
     const details = buildTimelineTurnSummaryDetails(db, thread, {
-      completedTurnDisplay: "collapse",
       includeDiagnosticOperations: false,
       sourceSeqEnd: turnRow.sourceSeqEnd,
       sourceSeqStart: turnRow.sourceSeqStart,
@@ -990,7 +985,6 @@ describe("in-turn timeline windows", () => {
           expect(row.sourceSeqStart).toBeLessThanOrEqual(4);
         }
         const details = buildTimelineTurnSummaryDetails(db, thread, {
-          completedTurnDisplay: "collapse",
           includeDiagnosticOperations: false,
           sourceSeqEnd: row.sourceSeqEnd,
           sourceSeqStart: row.sourceSeqStart,
@@ -1270,7 +1264,6 @@ describe("in-turn timeline windows", () => {
         }
         seenSummaries.add(row.id);
         const details = buildTimelineTurnSummaryDetails(db, thread, {
-          completedTurnDisplay: "collapse",
           includeDiagnosticOperations: false,
           sourceSeqEnd: row.sourceSeqEnd,
           sourceSeqStart: row.sourceSeqStart,
@@ -1591,7 +1584,6 @@ describe("timeline inline output reads", () => {
     ]);
 
     const capped = buildThreadTimelineWithProfile(db, thread, {
-      completedTurnDisplay: "collapse",
       eventBudget: LARGE_BUDGET,
       includeDiagnosticOperations: false,
       includeNestedRows: false,
@@ -1600,7 +1592,6 @@ describe("timeline inline output reads", () => {
       page: { kind: "latest", segmentLimit: 20 },
     }).response;
     const uncapped = buildThreadTimelineWithProfile(db, thread, {
-      completedTurnDisplay: "collapse",
       eventBudget: LARGE_BUDGET,
       includeDiagnosticOperations: false,
       includeNestedRows: false,
@@ -1666,7 +1657,6 @@ describe("timeline retained output reads", () => {
     ]);
 
     const capped = buildThreadTimelineWithProfile(db, thread, {
-      completedTurnDisplay: "collapse",
       eventBudget: LARGE_BUDGET,
       includeDiagnosticOperations: false,
       includeNestedRows: false,
@@ -1675,7 +1665,6 @@ describe("timeline retained output reads", () => {
       page: { kind: "latest", segmentLimit: 20 },
     }).response;
     const uncapped = buildThreadTimelineWithProfile(db, thread, {
-      completedTurnDisplay: "collapse",
       eventBudget: LARGE_BUDGET,
       includeDiagnosticOperations: false,
       includeNestedRows: false,
@@ -1976,7 +1965,6 @@ function collectTurnDetailsAndChildren(
     byTurnId.set(row.turnId, {
       children: row.children ?? [],
       details: buildTimelineTurnSummaryDetails(db, thread, {
-        completedTurnDisplay: "collapse",
         includeDiagnosticOperations: false,
         sourceSeqEnd: row.sourceSeqEnd,
         sourceSeqStart: row.sourceSeqStart,
@@ -2051,7 +2039,6 @@ describe("turn details for an item that finishes in a later turn", () => {
     });
     insertEvents(db, noopNotifier, events.slice(storedCount));
     const unfinishedLatest = buildThreadTimelineWithProfile(db, thread, {
-      completedTurnDisplay: "collapse",
       eventBudget: LARGE_BUDGET,
       includeDiagnosticOperations: false,
       includeNestedRows: true,
@@ -2066,10 +2053,7 @@ describe("turn details for an item that finishes in a later turn", () => {
       unfinishedLatest.timelinePage.olderCursor!,
     ).response;
     const beforeThought = unfinishedOlder.rows.find(
-      (row) =>
-        row.kind === "system" &&
-        row.systemKind === "operation" &&
-        row.operationKind === "reasoning",
+      (row) => row.kind === "system" && row.title.startsWith("Thought for"),
     );
     expect(beforeThought).toMatchObject({ detail: "Checking" });
 
@@ -2093,10 +2077,7 @@ describe("turn details for an item that finishes in a later turn", () => {
     expect(latest.rows.some((row) => row.kind === "system")).toBe(false);
     const after = collectTurnDetailsAndChildren(db, thread).get(turnId);
     const thoughts = after?.details.filter(
-      (row) =>
-        row.kind === "system" &&
-        row.systemKind === "operation" &&
-        row.operationKind === "reasoning",
+      (row) => row.kind === "system" && row.title.startsWith("Thought for"),
     );
     expect(thoughts).toEqual([
       expect.objectContaining({
@@ -2123,7 +2104,6 @@ describe("turn details for an item that finishes in a later turn", () => {
     }
     expect(
       buildTimelineTurnSummaryDetails(db, thread, {
-        completedTurnDisplay: "collapse",
         includeDiagnosticOperations: false,
         sourceSeqEnd: olderTurn.sourceSeqEnd,
         sourceSeqStart: olderTurn.sourceSeqStart,

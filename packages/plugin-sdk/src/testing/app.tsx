@@ -64,7 +64,6 @@ import {
   type UrlLinkProps,
   type ExperimentalFileLinkProps,
   type ExperimentalFileOpenOptions,
-  type ExperimentalComposerSubmitOptions,
   type ExperimentalAppPanel,
   type ExperimentalFixedTabTargetState,
   type ExperimentalOpenFixedTabOptions,
@@ -177,7 +176,7 @@ export interface ComposerLog {
    * has no submit pipeline of its own, so it records the options and clears the
    * draft — enough to assert what a picker scheduled and that it tidied up.
    */
-  submits: ExperimentalComposerSubmitOptions[];
+  submits: Array<{ sendAt: number }>;
 }
 
 interface TestComposerStore {
@@ -1595,7 +1594,6 @@ export function renderSlot<
     submits: [],
   };
   const composerOwnership = { active: true };
-  const submissionListeners = new Set<() => void>();
   const composer: TestComposerStore = {
     getAttachmentCount: () => composerAttachmentCount,
     getScope: () => composerScope,
@@ -1639,25 +1637,6 @@ export function renderSlot<
         }
         composerLog.focusCount += 1;
       },
-      experimental_onSubmitted(listener) {
-        submissionListeners.add(listener);
-        return () => {
-          submissionListeners.delete(listener);
-        };
-      },
-      experimental_removeMention({ provider, id }) {
-        for (
-          let index = composerLog.mentions.length - 1;
-          index >= 0;
-          index -= 1
-        ) {
-          const mention = composerLog.mentions[index];
-          if (mention?.provider === provider && mention.id === id) {
-            commitComposerText(composerText.replace(mention.label, ""));
-            composerLog.mentions.splice(index, 1);
-          }
-        }
-      },
       insertMention(mention) {
         const label = mention.label.trim() || mention.id;
         const separator =
@@ -1669,22 +1648,18 @@ export function renderSlot<
       focus() {
         composerLog.focusCount += 1;
       },
-      async experimental_submit(options) {
+      async experimental_submit({ sendAt }) {
         if (!composerOwnership.active) {
           throw new Error("This composer is no longer active.");
         }
         if (composerText.trim() === "") {
           throw new Error("Type a message before scheduling it.");
         }
-        if (
-          options.sendAt !== undefined &&
-          (!Number.isFinite(options.sendAt) || options.sendAt <= Date.now())
-        ) {
+        if (!Number.isFinite(sendAt) || sendAt <= Date.now()) {
           throw new Error("Pick a time in the future.");
         }
-        composerLog.submits.push(options);
+        composerLog.submits.push({ sendAt });
         commitComposerText("");
-        for (const listener of submissionListeners) listener();
       },
     },
   };

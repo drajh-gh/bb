@@ -6,29 +6,22 @@ import {
 import Constants from "expo-constants";
 import CookieManager from "@react-native-cookies/cookies";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Ref,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { WebView, type WebViewProps } from "react-native-webview";
+import { WebView } from "react-native-webview";
 import { useProfiles } from "@/app-shell";
 import {
   buildShellUrl,
   isExternallyOpenable,
   isShellNavigation,
-  resolveShellLoadPath,
   resolveShellScreenState,
   shellPathFromUrl,
   shouldReloadForSession,
   subscribeToShellCommands,
   type ShellLoadPhase,
 } from "@/lib/shell";
+import { getShellPreferenceStore } from "@/lib/shell/shell-preference-store";
 import { firstParam, settingsSectionHref } from "@/screens/shell/hrefs";
 import { useTheme } from "@/theme";
 import { Button, EmptyStatePanel, Spinner, Text } from "@/ui";
@@ -46,6 +39,7 @@ export function ProfileWebViewScreen() {
   const params = useLocalSearchParams<{ profileId?: string; path?: string }>();
   const { status, profiles, activeProfile, connection, setActiveProfile } =
     useProfiles();
+  const preferences = getShellPreferenceStore();
 
   const requestedProfileId = firstParam(params.profileId);
   const requestedPath = firstParam(params.path);
@@ -62,38 +56,28 @@ export function ProfileWebViewScreen() {
   const webViewRef = useRef<WebView>(null);
   const [load, setLoad] = useState<ShellLoadPhase>({ kind: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
-  const [visited, setVisited] = useState<{
-    scope: string;
-    path: string;
-  } | null>(null);
+  const currentPathRef = useRef<string>("/");
 
-  const loadScope =
-    profile === null
-      ? null
-      : `${profile.id}#${profile.serverUrl}#${requestedPath ?? ""}`;
+  const initialPath = useMemo(() => {
+    if (requestedPath !== undefined && requestedPath.length > 0) {
+      return requestedPath;
+    }
+    if (profile === null) return "/";
+    return preferences.getLastPath(profile.id) ?? "/";
+  }, [preferences, profile, requestedPath]);
 
-  const sourceUrl = useMemo(() => {
-    if (profile === null) return null;
-    const path = resolveShellLoadPath({
-      visitedPath:
-        visited !== null && visited.scope === loadScope ? visited.path : null,
-      requestedPath,
-    });
-    return buildShellUrl(profile.serverUrl, path);
-  }, [loadScope, profile, requestedPath, visited]);
+  const sourceUrl = useMemo(
+    () =>
+      profile === null ? null : buildShellUrl(profile.serverUrl, initialPath),
+    [initialPath, profile],
+  );
 
   const rememberPath = useCallback(
     (path: string) => {
-      if (loadScope === null) return;
-      setVisited((previous) =>
-        previous !== null &&
-        previous.scope === loadScope &&
-        previous.path === path
-          ? previous
-          : { scope: loadScope, path },
-      );
+      currentPathRef.current = path;
+      if (profile !== null) preferences.setLastPath(profile.id, path);
     },
-    [loadScope],
+    [preferences, profile],
   );
 
   const openDeviceSettings = useCallback(() => {
@@ -251,21 +235,14 @@ export function ProfileWebViewScreen() {
     );
   }
 
-  if (
-    profile === null ||
-    loadScope === null ||
-    sourceUrl === null ||
-    handshake === null
-  ) {
-    return null;
-  }
+  if (profile === null || sourceUrl === null || handshake === null) return null;
 
   return (
     <View className="flex-1 bg-background" testID="shell-webview">
-      <ShellWebView
-        key={`${loadScope}#${reloadKey}`}
+      <WebView
+        key={`${profile.id}#${sourceUrl}#${reloadKey}`}
         ref={webViewRef}
-        initialUrl={sourceUrl}
+        source={{ uri: sourceUrl }}
         style={{ backgroundColor: tokens.background }}
         sharedCookiesEnabled
         javaScriptEnabled
@@ -315,14 +292,4 @@ export function ProfileWebViewScreen() {
       />
     </View>
   );
-}
-
-type ShellWebViewProps = Omit<WebViewProps, "source"> & {
-  initialUrl: string;
-  ref: Ref<WebView>;
-};
-
-function ShellWebView({ initialUrl, ref, ...props }: ShellWebViewProps) {
-  const [source] = useState(() => ({ uri: initialUrl }));
-  return <WebView {...props} ref={ref} source={source} />;
 }

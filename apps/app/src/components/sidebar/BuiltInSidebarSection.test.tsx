@@ -62,7 +62,9 @@ describe("built-in sidebar section renderer", () => {
       }
 
       const header = (label: string) =>
-        screen.getByTitle(label).closest('[data-sidebar-sticky-tier="label"]');
+        screen
+          .getByTitle(label)
+          .closest('[data-sidebar-sticky-tier="label"]');
 
       expect(header("Pinned")?.classList.contains("relative")).toBe(true);
       expect(header("Pinned")?.classList.contains("top-auto")).toBe(true);

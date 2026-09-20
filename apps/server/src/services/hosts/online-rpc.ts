@@ -1,4 +1,3 @@
-import { hostCommandMayWake } from "./wake-policy.js";
 import { isHostCleanupAllowed } from "./cleanup-context.js";
 import { assertMachineLifecycleAdmission } from "../machines/lifecycle.js";
 import { getHost, getThread } from "@bb/db";
@@ -120,7 +119,6 @@ function assertHostActiveForRead(
   if (
     isCleanupRpc(deps, args) ||
     args.command.type === "thread.stop" ||
-    args.command.type === "thread.storage.delete" ||
     args.command.type === "environment.hook.cancel" ||
     args.command.type === "plugin.host.cancel" ||
     args.command.type === "plugin.host.dispose"
@@ -147,29 +145,12 @@ async function prepareHostForWork(
   retryOnTransportFailure: boolean,
 ): Promise<void> {
   if (isCleanupRpc(deps, args)) return;
-  if (!hostCommandMayWake(args.command)) {
-    assertHostActiveForRead(deps, args);
-    return;
-  }
-  const host = getHost(deps.db, args.hostId);
-  if (host?.phase === "suspended" || host?.phase === "resuming") {
-    deps.logger.info(
-      {
-        hostId: args.hostId,
-        commandType: args.command.type,
-        ...("threadId" in args.command
-          ? { threadId: args.command.threadId }
-          : {}),
-      },
-      "Host command requested machine wake",
-    );
-  }
   await ensureHostSessionReadyForWork(deps, { hostId: args.hostId }).catch(
     async (error) => {
       if (!retryOnTransportFailure || !isHostUnavailableApiError(error)) {
         throw error;
       }
-      await waitForRetryableHostRpcTransport(deps, args);
+      await waitForRetryableHostRpcTransport(deps, args.hostId);
     },
   );
   assertMachineLifecycleAdmission(deps, args.hostId);
@@ -233,7 +214,7 @@ async function callHostOnlineRpcWithRetry(
     }
     if (error instanceof HostOnlineRpcUnavailableError) {
       if (!options.waitForTransportFailure) throwOnlineRpcError(error);
-      await waitForRetryableHostRpcTransport(deps, args);
+      await waitForRetryableHostRpcTransport(deps, args.hostId);
       return requestHostOnlineRpcResponse(deps, args).catch((retryError) => {
         throwOnlineRpcError(retryError);
       });
@@ -271,15 +252,14 @@ async function callHostOnlineRpcWithRetry(
 
 async function waitForRetryableHostRpcTransport(
   deps: WorkSessionDeps,
-  args: CallHostOnlineRpcArgs<HostDaemonRpcCommand>,
+  hostId: string,
 ): Promise<void> {
-  if (!deps.hub.hasDaemonForHost(args.hostId)) {
-    await deps.hub.waitForDaemonForHost(
-      args.hostId,
-      HOST_DAEMON_REGISTRATION_WAIT_MS,
-    );
+  if (deps.hub.hasDaemonForHost(hostId)) {
+    await ensureHostSessionReadyForWork(deps, { hostId });
+    return;
   }
-  await prepareHostForWork(deps, args, false);
+  await deps.hub.waitForDaemonForHost(hostId, HOST_DAEMON_REGISTRATION_WAIT_MS);
+  await ensureHostSessionReadyForWork(deps, { hostId });
 }
 
 export function isHostUnavailableApiError(error: unknown): boolean {

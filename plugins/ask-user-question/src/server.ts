@@ -4,7 +4,11 @@ import {
   interactionResponseSchema,
   toolInputSchema,
 } from "./contracts.js";
-import { TOOL_DESCRIPTION, buildTimeoutMessage } from "./tool-definition.js";
+import {
+  TOOL_DESCRIPTION,
+  TOOL_INPUT_JSON_SCHEMA,
+  buildTimeoutMessage,
+} from "./tool-definition.js";
 import {
   assertInteractionPayloadFits,
   buildInteractionPayload,
@@ -89,7 +93,7 @@ export default function plugin(bb: BbPluginApi) {
       return { tools: [], skills: [] };
     }
     return {
-      tools: [TOOL_NAME],
+      tools: [{ name: TOOL_NAME, parameters: TOOL_INPUT_JSON_SCHEMA }],
       skills: [],
     };
   });

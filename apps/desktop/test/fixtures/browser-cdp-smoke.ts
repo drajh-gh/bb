@@ -168,7 +168,6 @@ async function main() {
     partition: `smoke-${randomBytes(12).toString("hex")}`,
     dispatchAppCommand: () => {},
     focusHostWebContents: () => {},
-    pagePreloadPath: null,
     resolveAppCommand: () => null,
   });
   const scopeA = {

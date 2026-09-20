@@ -24,14 +24,12 @@ export interface ThreadCreateServiceRequestInput {
   sendAt?: CreateThreadRequest["sendAt"];
   input: PromptInput[];
   pluginMetadata?: CreateThreadRequest["pluginMetadata"];
-  pluginSubmission?: CreateThreadRequest["pluginSubmission"];
   sectionId?: CreateThreadRequest["sectionId"];
   model?: CreateThreadRequest["model"];
   origin: ThreadCreateOrigin | null;
   originPluginId?: CreateThreadRequest["originPluginId"];
   originKind?: ThreadOriginKind | null;
   parentThreadId?: string;
-  lifecycleOwnerThreadId?: string;
   permissionMode?: CreateThreadRequest["permissionMode"];
   projectId: string;
   providerId?: CreateThreadRequest["providerId"];

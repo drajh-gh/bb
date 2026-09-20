@@ -1,4 +1,3 @@
-import { useInitialPromptDraft } from "./mentions/initial-prompt-draft";
 import { ProviderRequirementBanner } from "./banner/ProviderRequirementBanner";
 import { Button } from "@bb/shared-ui/button";
 import {
@@ -30,7 +29,6 @@ import type {
   PluginEnvironmentProviderInputsChange,
 } from "@get-bb/plugin-sdk";
 import type {
-  CreateThreadRequest,
   CreateExecutionInputSources,
   SidebarBootstrapResponse,
   SystemEnvironmentProvider,
@@ -53,7 +51,6 @@ import { withAppPromptActions } from "@/components/promptbox/PromptBoxActionsMen
 import { buildProviderPromptActionProps } from "@bb/client-core";
 import type { PromptMentionLinkResolver } from "@/components/promptbox/editor/prompt-mention-link";
 import { type PluginComposerHost } from "@/components/plugin/plugin-composer-host";
-import type { ExperimentalComposerSubmitOptions } from "@get-bb/plugin-sdk";
 import { newThreadEnvironmentArgsToSeed } from "@/components/plugin/new-thread-environment-seed";
 import { PluginSlotMount } from "@/components/plugin/PluginSlotMount";
 import { usePluginSlots } from "@/lib/plugin-slots";
@@ -194,7 +191,6 @@ export function resolveSubmittedExecutionSources(
 }
 
 export interface NewThreadComposerSubmission extends NewThreadRequest {
-  pluginSubmission?: CreateThreadRequest["pluginSubmission"];
   sendAt?: number;
 }
 
@@ -876,7 +872,7 @@ export function NewThreadComposer({
           (provider) =>
             provider.id === selectedEnvironmentProvider?.id &&
             provider.availability?.status !== "unavailable",
-        ) ?? false
+          ) ?? false
     );
   const handleSelectProvider = useCallback(
     (provider: SystemEnvironmentProvider, hostId: string | null) => {
@@ -1163,15 +1159,18 @@ export function NewThreadComposer({
     ],
   );
 
-  const initialPromptDraft = useInitialPromptDraft(seed?.initialPrompt ?? null);
   const seedInitialPrompt = promptDraft.restoreIfEmpty;
   const focusPromptBox = useCallback(() => {
     setLocalPromptBoxFocusRequest((current) => (current ?? 0) + 1);
   }, []);
   useEffect(() => {
-    if (!initialPromptDraft?.text) return;
-    seedInitialPrompt(initialPromptDraft);
-  }, [initialPromptDraft, seedInitialPrompt]);
+    if (!seed?.initialPrompt) return;
+    seedInitialPrompt({
+      text: seed.initialPrompt,
+      mentions: [],
+      attachments: [],
+    });
+  }, [seed?.initialPrompt, seedInitialPrompt]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isCopyingAttachments, setIsCopyingAttachments] = useState(false);
@@ -1303,10 +1302,7 @@ export function NewThreadComposer({
     },
     [navigate, projectId],
   );
-  const [commandState, setCommandState] = useState<{
-    query: string | null;
-    trigger: import("@bb/domain").PromptMentionCommandTrigger | null;
-  }>({ query: null, trigger: null });
+  const [commandQuery, setCommandQuery] = useState<string | null>(null);
   const [hasComposerFocused, setHasComposerFocused] = useState(false);
   const handleEditorFocus = useCallback(() => {
     setHasComposerFocused(true);
@@ -1323,12 +1319,11 @@ export function NewThreadComposer({
     projectId,
     providerId: selectedProviderId,
     commandScope: "new-thread",
-    skillsTriggers: providerPromptActions.skillsTriggers,
-    activeTrigger: commandState.trigger,
+    skillsTrigger: providerPromptActions.skillsTrigger,
     promptActions,
     environmentId: reuseEnvironmentId,
     hostId: projectHostId,
-    query: commandState.query,
+    query: commandQuery,
     composerFocused: hasComposerFocused,
   });
   const promptHistoryEnabled = usePromptHistoryEnabled();
@@ -1352,17 +1347,11 @@ export function NewThreadComposer({
     () => promptDraftToInput(currentDraft),
     [currentDraft],
   );
-  const submitProgrammaticallyRef = useRef<
-    (
-      options: ExperimentalComposerSubmitOptions,
-      pluginSubmission: NewThreadComposerSubmission["pluginSubmission"],
-    ) => Promise<void>
+  const submitScheduledRef = useRef<
+    (options: { sendAt: number }) => Promise<void>
   >(async () => {});
-  const submitProgrammaticallyThroughRef = useCallback(
-    (
-      options: ExperimentalComposerSubmitOptions,
-      pluginSubmission: NewThreadComposerSubmission["pluginSubmission"],
-    ) => submitProgrammaticallyRef.current(options, pluginSubmission),
+  const submitScheduledThroughRef = useCallback(
+    (options: { sendAt: number }) => submitScheduledRef.current(options),
     [],
   );
   const pluginComposerHost = useMemo<PluginComposerHost>(
@@ -1373,7 +1362,7 @@ export function NewThreadComposer({
       subscribeDraft: promptDraft.subscribe,
       setDraft: promptDraft.setDraft,
       focus: focusPromptBox,
-      submit: submitProgrammaticallyThroughRef,
+      submit: submitScheduledThroughRef,
     }),
     [
       focusPromptBox,
@@ -1382,7 +1371,7 @@ export function NewThreadComposer({
       promptDraft.setDraft,
       promptDraft.storageKey,
       promptDraft.subscribe,
-      submitProgrammaticallyThroughRef,
+      submitScheduledThroughRef,
     ],
   );
 
@@ -1436,11 +1425,7 @@ export function NewThreadComposer({
     submissionEnvironmentUnavailable: submissionEnvironment === null,
   });
   const submitDraft = useCallback(
-    async (
-      blockedReason: string | null,
-      submitOptions: ExperimentalComposerSubmitOptions | null,
-      pluginSubmission?: NewThreadComposerSubmission["pluginSubmission"],
-    ) => {
+    async (blockedReason: string | null, sendAt: number | null) => {
       const submittedDraft = promptDraft.getCurrent();
       const input = promptDraftToInput(submittedDraft);
       if (
@@ -1478,10 +1463,7 @@ export function NewThreadComposer({
         ),
         environment: submissionEnvironment,
         input,
-        ...(submitOptions?.sendAt === undefined
-          ? {}
-          : { sendAt: submitOptions.sendAt }),
-        ...(pluginSubmission === undefined ? {} : { pluginSubmission }),
+        ...(sendAt === null ? {} : { sendAt }),
       };
       isSubmittingRef.current = true;
       setIsSubmitting(true);
@@ -1529,11 +1511,8 @@ export function NewThreadComposer({
     [submitDraft],
   );
   useEffect(() => {
-    submitProgrammaticallyRef.current = async (
-      submitOptions,
-      pluginSubmission,
-    ) => {
-      await submitDraft(null, submitOptions, pluginSubmission);
+    submitScheduledRef.current = async ({ sendAt }) => {
+      await submitDraft(null, sendAt);
     };
   }, [submitDraft]);
 
@@ -1606,15 +1585,14 @@ export function NewThreadComposer({
                 options.resolveMentionLink ?? defaultMentionLinkResolver,
             },
             command: {
-              triggers: commandSuggestions.triggers,
+              trigger: commandSuggestions.trigger,
               suggestions: commandSuggestions.suggestions,
               isLoading: commandSuggestions.isLoading,
               isError: commandSuggestions.isError,
               hasMore: commandSuggestions.hasMore,
               isLoadingMore: commandSuggestions.isLoadingMore,
               loadMore: commandSuggestions.loadMore,
-              onQueryChange: (query, trigger) =>
-                setCommandState({ query, trigger }),
+              onQueryChange: setCommandQuery,
               onEditorFocus: handleEditorFocus,
             },
           }}

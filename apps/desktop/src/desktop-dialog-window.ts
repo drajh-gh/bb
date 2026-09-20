@@ -1,11 +1,7 @@
-import { BrowserWindow, screen } from "electron";
-
-const DIALOG_FALLBACK_CONTENT_HEIGHT = 320;
-const DIALOG_MIN_CONTENT_HEIGHT = 120;
-const DIALOG_WORK_AREA_MARGIN = 80;
-const DIALOG_MEASURE_TIMEOUT_MS = 1_000;
+import { BrowserWindow } from "electron";
 
 interface CreateDesktopDialogWindowArgs {
+  height: number;
   parentWindow: BrowserWindow | null;
   preloadPath: string;
   title: string;
@@ -51,7 +47,7 @@ export function createDesktopDialogWindow(
 ): BrowserWindow {
   return new BrowserWindow({
     fullscreenable: false,
-    height: DIALOG_FALLBACK_CONTENT_HEIGHT,
+    height: args.height,
     maximizable: false,
     minimizable: false,
     modal: args.parentWindow !== null,
@@ -59,7 +55,6 @@ export function createDesktopDialogWindow(
     resizable: false,
     show: false,
     title: args.title,
-    useContentSize: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -70,78 +65,13 @@ export function createDesktopDialogWindow(
   });
 }
 
-export function clampDialogContentHeight(args: {
-  contentHeight: number;
-  workAreaHeight: number;
-}): number {
-  const available = args.workAreaHeight - DIALOG_WORK_AREA_MARGIN;
-  const maxHeight = Math.max(DIALOG_MIN_CONTENT_HEIGHT, available);
-  return Math.min(
-    Math.max(DIALOG_MIN_CONTENT_HEIGHT, Math.ceil(args.contentHeight)),
-    maxHeight,
-  );
-}
-
-async function measureDialogContentHeight(
-  dialogWindow: BrowserWindow,
-): Promise<number | null> {
-  const measurement = dialogWindow.webContents
-    .executeJavaScript(`document.body.getBoundingClientRect().height`)
-    .then((measured: unknown) =>
-      typeof measured === "number" && Number.isFinite(measured)
-        ? measured
-        : null,
-    )
-    .catch(() => null);
-  const timeout = new Promise<null>((resolve) => {
-    setTimeout(() => {
-      resolve(null);
-    }, DIALOG_MEASURE_TIMEOUT_MS);
-  });
-  return Promise.race([measurement, timeout]);
-}
-
-function fitDialogToContent(
-  dialogWindow: BrowserWindow,
-  contentHeight: number,
-): void {
-  const [width] = dialogWindow.getContentSize();
-  const workAreaHeight = screen.getDisplayMatching(
-    dialogWindow.getBounds(),
-  ).workAreaSize.height;
-  const height = clampDialogContentHeight({ contentHeight, workAreaHeight });
-  const wasResizable = dialogWindow.isResizable();
-  dialogWindow.setResizable(true);
-  dialogWindow.setContentSize(width, height);
-  dialogWindow.setResizable(wasResizable);
-}
-
 export function showDesktopDialogHtml(
   dialogWindow: BrowserWindow,
   html: string,
 ): void {
-  let shown = false;
-  function showOnce(): void {
-    if (shown || dialogWindow.isDestroyed()) {
-      return;
-    }
-    shown = true;
+  dialogWindow.once("ready-to-show", () => {
     dialogWindow.show();
-  }
-
-  dialogWindow.webContents.once("did-finish-load", () => {
-    void (async () => {
-      const contentHeight = await measureDialogContentHeight(dialogWindow);
-      if (contentHeight !== null && !dialogWindow.isDestroyed()) {
-        fitDialogToContent(dialogWindow, contentHeight);
-      }
-      showOnce();
-    })();
   });
-  dialogWindow.webContents.once("did-fail-load", () => {
-    showOnce();
-  });
-
   void dialogWindow.loadURL(
     `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
   );

@@ -188,7 +188,7 @@ function. Do not use `bb.events.on` for SDK entity-change subscriptions.
 explicit discriminated `scope`: `{ kind: "thread", threadId }`,
 `{ kind: "environment", environmentId }`, or
 `{ kind: "host_path", hostId, cwd }`. The host is always explicit; there is no
-server-machine default. Existing-session operations are terminal-ID-only:
+primary-host default. Existing-session operations are terminal-ID-only:
 `get`, `input`, `resize`, `output`, `rename`, `restart`, and `close`.
 `restart` closes the old session and creates a shell with the same scope, size,
 and title; it returns a new terminal ID and does not replay the original command.
@@ -215,8 +215,7 @@ if (saved.outcome === "conflict") {
 }
 ```
 
-For `bb.sdk.files`, `hostId` is optional and defaults to the server machine
-(`primaryHostId` from `bb.sdk.system.config()`).
+For `bb.sdk.files`, `hostId` is optional and defaults to the primary host.
 Other SDK areas define their own routing rules.
 `bb.sdk.files.list({ path, query?, limit? })` is a recursive fuzzy file
 listing under a directory. Writes cap at 25 MB and return

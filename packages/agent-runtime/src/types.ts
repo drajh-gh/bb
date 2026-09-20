@@ -28,9 +28,7 @@ export type AgentRuntimeShellEnvironment = Record<string, string>;
 export interface AgentRuntimeContributedEnvEntry {
   name: string;
   value: string | { serverPath: string };
-  source:
-    | { plugin: string }
-    | { core: "machine-git" | "machine-environment" | "project-environment" };
+  source: { plugin: string } | { core: "machine-git" | "machine-environment" };
   reason: string;
 }
 
@@ -74,10 +72,7 @@ export interface AgentRuntimeOptions {
 
   onEvent: (event: ThreadEvent) => void;
 
-  onToolCall: (
-    request: ToolCallRequest,
-    signal?: AbortSignal,
-  ) => Promise<ToolCallResponse>;
+  onToolCall: (request: ToolCallRequest) => Promise<ToolCallResponse>;
 
   onInteractiveRequest?: (
     request: PendingInteractionCreate,

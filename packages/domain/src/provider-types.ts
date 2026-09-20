@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { completedTurnDisplaySchema } from "./completed-turn-display.js";
 import {
   permissionModeSchema,
   promptMentionCommandTriggerSchema,
@@ -121,7 +120,6 @@ export const providerInfoSchema = z.object({
   }),
   capabilities: providerCapabilitiesSchema,
   composerActions: z.array(providerComposerActionSchema),
-  completedTurnDisplay: completedTurnDisplaySchema,
   available: z.boolean(),
   strings: providerStringsSchema.optional(),
   serviceTiers: z.array(providerOptionDescriptorSchema).optional(),

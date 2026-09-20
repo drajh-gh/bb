@@ -118,7 +118,6 @@ describe("bb.providers.register (server)", () => {
           },
           composerActions: [
             { kind: "skills", trigger: "/" },
-            { kind: "skills", trigger: "$" },
             {
               kind: "plan",
               command: { trigger: "/", name: "plan", trailingText: " " },

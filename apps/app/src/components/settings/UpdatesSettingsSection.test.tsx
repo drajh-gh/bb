@@ -52,15 +52,9 @@ vi.mock("@/components/ui/app-toast", () => ({
 
 vi.mock("@/lib/sdk", async () => {
   const { makeProviderInfo } = await import("@bb/test-helpers/domain-fixtures");
-  const { makeSystemConfig } = await import("@/test/fixtures/system-config");
   return {
     sdk: {
-      system: {
-        version: vi.fn(),
-        config: vi.fn(async () =>
-          makeSystemConfig({ primaryHostId: "host_primary" }),
-        ),
-      },
+      system: { version: vi.fn() },
       providers: {
         list: vi.fn(async () => [
           makeProviderInfo({ id: "codex", displayName: "Codex" }),
@@ -472,7 +466,7 @@ The canonical release summary.
     });
     expect(screen.queryByText("2 up to date")).toBeNull();
     expect(screen.getByRole("heading", { name: /workstation/ })).toBeDefined();
-    expect(screen.queryByText("Server")).toBeNull();
+    expect(screen.queryByText("Primary")).toBeNull();
     expect(screen.queryByText("This machine")).toBeNull();
     expect(screen.getByRole("heading", { name: /studio-mac/ })).toBeDefined();
     expect(screen.getAllByText("Codex")).toHaveLength(2);
@@ -1001,7 +995,7 @@ The canonical release summary.
     expect(screen.queryByText("1 up to date")).toBeNull();
   });
 
-  it("badges the client-local daemon independently from the server machine", async () => {
+  it("badges the client-local daemon independently from the primary update owner", () => {
     useDesktopUpdateInfoMock.mockReturnValue({
       desktopApi: null,
       desktopInfo: null,
@@ -1032,43 +1026,10 @@ The canonical release summary.
       name: /workstation/u,
     });
     const localHeading = screen.getByRole("heading", { name: /studio-mac/u });
-    await waitFor(() => {
-      expect(primaryHeading.textContent).toContain("Server");
-    });
+    expect(primaryHeading.textContent).not.toContain("Primary");
     expect(primaryHeading.textContent).not.toContain("This machine");
     expect(localHeading.textContent).toContain("This machine");
-    expect(localHeading.textContent).not.toContain("Server");
-  });
-
-  it("badges a lone server machine without marking it as this machine", async () => {
-    useDesktopUpdateInfoMock.mockReturnValue({
-      desktopApi: null,
-      desktopInfo: null,
-      isDesktop: false,
-    });
-    const primary = makeHost({ id: "host_primary", name: "workstation" });
-    hostDaemon.localDaemonHostId = primary.id;
-    useUpdateInventoryMock.mockReturnValue(
-      makeInventory({
-        machines: [
-          makeMachine({
-            host: primary,
-            issues: [makeUpdateIssue({ provider: "codex" })],
-            isPrimary: true,
-          }),
-        ],
-      }),
-    );
-
-    renderSection();
-
-    const primaryHeading = screen.getByRole("heading", {
-      name: /workstation/u,
-    });
-    await waitFor(() => {
-      expect(primaryHeading.textContent).toContain("Server");
-    });
-    expect(primaryHeading.textContent).not.toContain("This machine");
+    expect(localHeading.textContent).not.toContain("Primary");
   });
 
   it("lists Cursor updates with the other provider CLIs", async () => {

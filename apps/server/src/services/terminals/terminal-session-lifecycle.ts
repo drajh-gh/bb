@@ -44,10 +44,6 @@ import {
 } from "../lib/lifecycle-api-errors.js";
 import { requireWorkspaceCommandTarget } from "../environments/workspace-command-target.js";
 import {
-  isServerMoveSnapshotFenced,
-  serverMovingError,
-} from "../server-move/freeze-state.js";
-import {
   type PendingRpcKey,
   PendingRpcRegistry,
 } from "./pending-rpc-registry.js";
@@ -301,11 +297,6 @@ interface ExpireDisconnectedHostTerminalsArgs {
 interface HandleDaemonTerminalMessageArgs {
   hostId: string;
   message: HostDaemonDaemonWsMessage;
-  sessionId: string;
-}
-
-interface RefuseDaemonTerminalOpenArgs {
-  message: TerminalOpenedMessage;
   sessionId: string;
 }
 
@@ -740,29 +731,27 @@ export class TerminalSessionLifecycle {
     try {
       opened = await pendingOpen;
     } catch (error) {
-      const code = error instanceof ApiError ? error.body.code : null;
-      const fenced = isServerMoveSnapshotFenced(this.options.db);
-      if (code === "terminal_open_timeout" || code === "server_moving") {
-        if (!fenced) {
-          const exited = updateTerminalById(
-            this.options.db,
-            startingSession.id,
-            {
-              closeReason: "open-timeout",
-              exitCode: null,
-              kind: "exit",
-            },
-          );
-          if (exited) {
-            this.notifyTerminalSessionChanged(exited);
-          }
+      if (
+        error instanceof ApiError &&
+        error.body.code === "terminal_open_timeout"
+      ) {
+        const exited = updateTerminalById(this.options.db, startingSession.id, {
+          closeReason: "open-timeout",
+          exitCode: null,
+          kind: "exit",
+        });
+        if (exited) {
+          this.notifyTerminalSessionChanged(exited);
         }
         this.options.hub.sendDaemonSessionMessage(daemonSession.id, {
           type: "terminal.close",
           terminalId: startingSession.id,
           reason: "open-timeout",
         });
-      } else if (!fenced && code !== "host_disconnected") {
+      } else if (
+        !(error instanceof ApiError) ||
+        error.body.code !== "host_disconnected"
+      ) {
         const exited = updateTerminalById(this.options.db, startingSession.id, {
           closeReason: "process-exit",
           exitCode: null,
@@ -1373,13 +1362,6 @@ export class TerminalSessionLifecycle {
         }
         return;
     }
-  }
-
-  refuseDaemonTerminalOpen(args: RefuseDaemonTerminalOpenArgs): void {
-    this.pendingOpens.fail(
-      terminalResponseRpcKey(args.sessionId, args.message),
-      serverMovingError(),
-    );
   }
 
   handleDaemonTerminalMessage(args: HandleDaemonTerminalMessageArgs): void {

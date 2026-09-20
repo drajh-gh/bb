@@ -53,7 +53,7 @@ function Row({
           host={host}
           isPrimary={false}
           isThisMachine={false}
-          showServerBadge={false}
+          showPrimaryBadge={false}
           platformLabel={null}
           projectCount={0}
           now={now}
@@ -63,9 +63,6 @@ function Row({
           onSuspend={noop}
           onResume={noop}
           onRetryCleanup={noop}
-          canMoveServerHere={false}
-          serverMoveEnabled={false}
-          onMoveServerHere={noop}
           lifecycleActionPending={false}
           retryUpdatePending={false}
           machineProvider={machineProvider}
@@ -92,7 +89,7 @@ export function Rows() {
           machineProvider={null}
           isPrimary
           isThisMachine
-          showServerBadge
+          showPrimaryBadge
           platformLabel="macOS"
           projectCount={1}
         />

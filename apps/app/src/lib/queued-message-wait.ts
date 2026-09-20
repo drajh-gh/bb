@@ -75,7 +75,7 @@ export function queuedMessageWaitIcon(args: {
     case "interaction":
       return "CircleQuestion";
     case "plugin":
-      return null;
+      return "Limitation";
   }
 }
 

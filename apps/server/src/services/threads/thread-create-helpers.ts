@@ -1,6 +1,5 @@
 import {
   createThread,
-  InvalidLifecycleOwnerError,
   getThreadSectionById,
   getProjectSourceByHost,
   getProject,
@@ -109,7 +108,6 @@ export function createThreadRecord(
       sectionId,
       parentThreadId: args.request.parentThreadId ?? null,
       sourceThreadId: args.request.sourceThreadId ?? null,
-      lifecycleOwnerThreadId: args.request.lifecycleOwnerThreadId,
       originKind: args.request.originKind,
       originPluginId: args.request.originPluginId ?? null,
       pluginMetadata: args.request.pluginMetadata,
@@ -124,9 +122,6 @@ export function createThreadRecord(
     emitPluginThreadCreated(thread);
     return thread;
   } catch (error) {
-    if (error instanceof InvalidLifecycleOwnerError) {
-      throw new ApiError(400, "invalid_request", error.message);
-    }
     if (
       sectionId !== null &&
       error instanceof Error &&

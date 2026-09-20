@@ -7,7 +7,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -554,7 +553,7 @@ async function handleRequest(
       await handleThreadConstruction(
         request.id,
         request.params.threadId,
-        `pi_${randomUUID()}`,
+        request.params.threadId,
         toPiSessionParams(request.params),
       );
       break;

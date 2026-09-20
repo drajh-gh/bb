@@ -43,8 +43,7 @@ Run `bb guide <chapter>` for command details:
   agent-configuration  AGENTS.md and skills files that shape agents
   providers            Discovering providers and models
   projects             Project CRUD and sources
-  machines             Listing and targeting execution machines, moving the
-                       server
+  machines             Listing and targeting execution machines
   terminals            Persistent PTY sessions across all supported scopes
   browser              Experimental built-in browser tabs and control leases
   customization        Theming the app palette, settings, mobile push

@@ -210,20 +210,15 @@ describe("bb machine command output", () => {
     },
   );
 
-  it("bb machine list marks the server machine in the table", async () => {
+  it("bb machine list renders names, IDs, status, and relative last seen", async () => {
     vi.spyOn(Date, "now").mockReturnValue(1_700_000_120_000);
-    stubServerApi({
-      "v1.hosts.$get": vi.fn(async () => hosts),
-      "v1.system.config.$get": vi.fn(async () => ({
-        primaryHostId: "host-primary",
-      })),
-    });
+    stubServerApi({ "v1.hosts.$get": vi.fn(async () => hosts) });
 
     await runCommand(["machine", "list"], register);
 
     expect(collectLogPayloads(vi.mocked(console.log))).toEqual([
       "",
-      "Name         Role    ID            Type        Status        Provider       Last seen\n-----------  ------  ------------  ----------  ------------  -------------  ---------\nworkstation  server  host-primary  persistent  connected     user-enrolled  2m ago\n-----------  ------  ------------  ----------  ------------  -------------  ---------\nlaptop               host-remote   persistent  disconnected  ssh            never",
+      "Name         ID            Type        Status        Provider       Last seen\n-----------  ------------  ----------  ------------  -------------  ---------\nworkstation  host-primary  persistent  connected     user-enrolled  2m ago\n-----------  ------------  ----------  ------------  -------------  ---------\nlaptop       host-remote   persistent  disconnected  ssh            never",
       "",
     ]);
   });

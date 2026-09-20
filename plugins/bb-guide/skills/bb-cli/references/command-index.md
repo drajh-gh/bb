@@ -12,7 +12,6 @@ This index lists every command path that the core CLI registers. Read the task-s
 - `bb settings show`
 - `bb settings ai-services`
 - `bb settings general`
-- `bb settings completed-turns`
 - `bb settings experiment`
 - `bb settings keyboard`
 - `bb settings keyboard hints`
@@ -84,7 +83,6 @@ This index lists every command path that the core CLI registers. Read the task-s
 - `bb machine remove`
 - `bb machine suspend`
 - `bb machine resume`
-- `bb machine reconcile`
 - `bb machine retry-cleanup`
 - `bb machine retry-update`
 - `bb machine provider-cli`
@@ -96,23 +94,6 @@ environment and requires `--environment-provider <id>`. For a composed option,
 use `--environment-provider modal-sandbox` alone. `--machine-inputs <json>`
 configures the machine with optional configured `preset` and `image` names;
 `--environment-inputs <json>` configures the workspace. Neither carries secrets.
-
-## server
-
-- `bb server`
-- `bb server move`
-- `bb server move status`
-- `bb server move cancel`
-- `bb server export`
-- `bb server import`
-- `bb server unlock`
-- `bb server allow-connect`
-- `bb server delete-old-copy`
-
-`move`, `move status`, `move cancel`, and `export` call the running server.
-`import`, `unlock`, `allow-connect`, and `delete-old-copy` act on a local data
-directory (`--data-dir`, else `BB_DATA_DIR`, else `~/.bb`) and never call a
-server.
 
 ## updates
 
@@ -319,6 +300,6 @@ server.
 Machine lists and name/ID selectors include machines still being created. Machine creation is durable: `create --no-wait` returns the creating host ID. `machine show <host-id>` reads progress and `machine remove <host-id>` cancels it. SIGINT only stops following.
 
 Machine environment: `bb machine env list`, `bb machine env set NAME`
-(value from stdin), and `bb machine env unset NAME`; all accept `--project <id>` for project overrides and `--json`. Omit `--project` for global settings.
+(value from stdin), and `bb machine env unset NAME`; all accept `--json`.
 
 Standalone `bb machine create` machines remain until explicitly removed.

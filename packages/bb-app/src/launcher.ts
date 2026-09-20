@@ -5,13 +5,13 @@ import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { spawnLoggedProcess } from "./logged-process.js";
 import {
-  formatServerMovedNotice,
-  startMovedResponder,
-  type MovedResponder,
-  type StartMovedResponderArgs,
-} from "./moved-responder.js";
-import { mutateManagedJsonFile } from "@bb/config/managed-json-file";
-import { access, readFile } from "node:fs/promises";
+  access,
+  mkdir,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -76,23 +76,7 @@ import {
   resolveProdDataDir,
   stripThreadContextEnv,
 } from "@bb/config/runtime";
-import {
-  readServerImportFile,
-  readServerMovedFile,
-  type ServerMovedFile,
-} from "@bb/server-archive";
 import { z } from "zod";
-import {
-  bold,
-  cyan,
-  dim,
-  green,
-  red,
-  yellow,
-  log,
-  beginStep,
-  endStep,
-} from "./launcher-output.js";
 
 const HOST_AUTH_FILE_NAME = "auth.json";
 const HOST_ID_FILE_NAME = "host-id";
@@ -102,10 +86,6 @@ const HEALTH_CHECK_REQUEST_TIMEOUT_MS = 1_000;
 const MANAGED_PROCESS_TERMINATION_TIMEOUT_MS = 5_000;
 const MANAGED_PROCESS_KILL_TIMEOUT_MS = 1_000;
 const MANAGED_PROCESS_RESTART_RETRY_DELAY_MS = 1_000;
-const MOVED_SERVER_EXIT_POLL_INTERVAL_MS = 1_000;
-const MOVED_SERVER_EXIT_GRACE_MS = 20_000;
-const MOVED_MODE_MARKER_POLL_INTERVAL_MS = 1_000;
-const BB_SERVER_MOVED_EXIT_CODE = 3;
 const START_COMMAND = "start";
 const STOP_COMMAND = "stop";
 const STOP_TIMEOUT_MS = 15_000;
@@ -394,11 +374,10 @@ interface StartFullStackServerProcessArgs {
   processes: ManagedFullStackProcesses;
 }
 
-interface StartDaemonProcessArgs {
+interface StartFullStackDaemonProcessArgs {
+  autoJoinEnv: NodeJS.ProcessEnv;
   context: BbAppStartContext;
-  env: NodeJS.ProcessEnv;
   processes: ManagedFullStackProcesses;
-  serverUrl: string;
 }
 
 interface RestartManagedProcessArgs {
@@ -409,109 +388,14 @@ interface RestartManagedProcessArgs {
   start: StartManagedProcess;
 }
 
-export type ReadServerMovedFileFn = () => Promise<ServerMovedFile | null>;
-
-type StartMovedResponderFn = (
-  args: StartMovedResponderArgs,
-) => Promise<MovedResponder | null>;
-
 interface SuperviseFullStackProcessesArgs {
   context: BbAppStartContext;
   delayMilliseconds: DelayMillisecondsFn;
   isHealthyServerAnswering?: (url: string) => Promise<boolean>;
   isShutdownRequested: () => boolean;
-  onServerMoved: (
-    movedFile: ServerMovedFile,
-  ) => Promise<FullStackSupervisionResult>;
   processes: ManagedFullStackProcesses;
-  readServerMovedFile: ReadServerMovedFileFn;
   startDaemon: StartManagedProcess;
   startServer: StartManagedProcess;
-}
-
-interface WaitForServerExitWhileMovedArgs {
-  delayMilliseconds: DelayMillisecondsFn;
-  isShutdownRequested: () => boolean;
-  readServerMovedFile: ReadServerMovedFileFn;
-  serverRun: ManagedProcessRun;
-}
-
-export interface ServerMoveMarkers {
-  movedFile: ServerMovedFile | null;
-  pendingMoveImport: boolean;
-}
-
-export type ReadServerMoveMarkersFn = () => Promise<ServerMoveMarkers>;
-
-export type MovedModeResult = "shutdown" | "unlocked";
-
-interface SuperviseMovedDaemonProcessArgs {
-  context: BbAppStartContext;
-  delayMilliseconds: DelayMillisecondsFn;
-  isMovedModeOver: () => boolean;
-  isServerUnlocked: () => Promise<boolean>;
-  processes: ManagedFullStackProcesses;
-  startDaemon: StartManagedProcess;
-}
-
-interface RunMovedModeArgs {
-  bindHost: ServerBindHost;
-  context: BbAppStartContext;
-  delayMilliseconds: DelayMillisecondsFn;
-  isShutdownRequested: () => boolean;
-  movedFile: ServerMovedFile;
-  processes: ManagedFullStackProcesses;
-  readServerMoveMarkers: ReadServerMoveMarkersFn;
-  startDaemon: StartManagedProcess;
-  startResponder: StartMovedResponderFn;
-  waitForMarkerPoll: () => Promise<void>;
-}
-
-export type FullStackEntry = "startup" | "unlocked";
-
-interface FullStackStarters {
-  prepareDaemon: () => Promise<StartManagedProcess>;
-  startServer: StartManagedProcess;
-}
-
-interface SuperviseBbAppStartArgs {
-  context: BbAppStartContext;
-  delayMilliseconds: DelayMillisecondsFn;
-  isShutdownRequested: () => boolean;
-  prepareFullStack: (entry: FullStackEntry) => Promise<FullStackStarters>;
-  processes: ManagedFullStackProcesses;
-  readServerMoveMarkers: ReadServerMoveMarkersFn;
-  readServerMovedFile: ReadServerMovedFileFn;
-  serverBindHost: ServerBindHost;
-  serverListenerUrl: string;
-  shutdown: (signal: NodeJS.Signals) => Promise<void>;
-  startMovedDaemon: (movedFile: ServerMovedFile) => Promise<ManagedProcessRun>;
-  startMovedResponder: StartMovedResponderFn;
-  waitForMarkerPoll: () => Promise<void>;
-}
-
-interface ReadServerMoveMarkersArgs {
-  dataDir: string;
-}
-
-interface ResolveMovedDaemonLaunchArgs {
-  entrypointUrl: string;
-  env: NodeJS.ProcessEnv;
-  homeDir: string;
-  movedFile: ServerMovedFile;
-  options: LauncherCliOptions;
-  worktreePolicy: WorktreeRuntimePolicy | null;
-}
-
-interface MovedDaemonLaunch {
-  context: BbAppStartContext;
-  env: NodeJS.ProcessEnv;
-  serverUrl: string;
-}
-
-interface PrintMovedModeReadyOutputArgs {
-  context: BbAppStartContext;
-  movedFile: ServerMovedFile;
 }
 
 interface TerminateManagedFullStackProcessesArgs {
@@ -626,11 +510,33 @@ interface WriteManagedConfigArgs {
   dataDir: string;
 }
 
+interface WriteManagedConfigFileArgs {
+  config: ManagedConfigForWrite;
+  dataDir: string;
+}
+
+interface WriteManagedEnvFileArgs {
+  config: ManagedEnvFile;
+  dataDir: string;
+}
+
+interface WriteClientConfigFileArgs {
+  config: ClientConfig;
+  dataDir: string;
+}
+
 interface ReadJsonConfigFileArgs<T> {
   label: string;
   missing: T;
   parse: (value: unknown) => T;
   path: string;
+}
+
+interface WriteJsonFileAtomicallyArgs {
+  dataDir: string;
+  path: string;
+  tempName: string;
+  value: ClientConfig | ManagedConfigForWrite | ManagedEnvFile;
 }
 
 interface ResolveServerUrlArgs {
@@ -708,6 +614,46 @@ interface AssertConfiguredServerBindHostArgs {
 
 interface ResolveHostDaemonCommandResult {
   kind: "join" | "start";
+}
+
+function color(code: number, value: string): string {
+  return `\x1b[${code}m${value}\x1b[0m`;
+}
+
+function bold(value: string): string {
+  return color(1, value);
+}
+
+function cyan(value: string): string {
+  return color(36, value);
+}
+
+function dim(value: string): string {
+  return color(2, value);
+}
+
+function green(value: string): string {
+  return color(32, value);
+}
+
+function red(value: string): string {
+  return color(31, value);
+}
+
+function yellow(value: string): string {
+  return color(33, value);
+}
+
+function log(icon: string, message: string): void {
+  process.stdout.write(`  ${icon}  ${message}\n`);
+}
+
+function beginStep(message: string): void {
+  process.stdout.write(`\x1b[2K  ${dim("○")}  ${message}\r`);
+}
+
+function endStep(icon: string, message: string): void {
+  process.stdout.write(`\x1b[2K  ${icon}  ${message}\n`);
 }
 
 function formatReadyOutputRow(label: string, value: string): string {
@@ -1170,40 +1116,36 @@ function pruneManagedEnvFile(config: ManagedEnvFile): ManagedEnvFile {
   return nextConfig;
 }
 
-async function mutateManagedConfig(
-  dataDir: string,
-  mutate: (current: ManagedConfigForWrite) => ManagedConfigForWrite,
+async function writeJsonFileAtomically(
+  args: WriteJsonFileAtomicallyArgs,
 ): Promise<void> {
-  await mutateManagedJsonFile({
-    path: formatBbAppConfigPath(dataDir),
-    read: () => readManagedConfigForWrite({ dataDir }),
-    mutate: (current) => {
-      const next = mutate(current);
-      validateManagedConfigForWrite(next);
-      return pruneManagedConfig(next);
-    },
-  });
+  await mkdir(args.dataDir, { recursive: true });
+  const tempPath = join(
+    args.dataDir,
+    `${args.tempName}.${process.pid}.${randomUUID()}.tmp`,
+  );
+
+  try {
+    await writeFile(tempPath, `${JSON.stringify(args.value, null, 2)}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    await rename(tempPath, args.path);
+  } catch (error) {
+    await unlink(tempPath).catch(() => undefined);
+    throw error;
+  }
 }
 
-async function mutateManagedEnv(
-  dataDir: string,
-  mutate: (current: ManagedEnvFile) => ManagedEnvFile,
+async function writeManagedConfigFile(
+  args: WriteManagedConfigFileArgs,
 ): Promise<void> {
-  await mutateManagedJsonFile({
-    path: formatBbAppEnvPath(dataDir),
-    read: () => readManagedEnvFile({ dataDir }),
-    mutate: (current) => pruneManagedEnvFile(mutate(current)),
-  });
-}
-
-async function mutateClientConfig(
-  dataDir: string,
-  mutate: (current: ClientConfig) => ClientConfig,
-): Promise<void> {
-  await mutateManagedJsonFile({
-    path: formatClientConfigPath(dataDir),
-    read: () => readClientConfig({ dataDir }),
-    mutate,
+  validateManagedConfigForWrite(args.config);
+  await writeJsonFileAtomically({
+    dataDir: args.dataDir,
+    path: formatBbAppConfigPath(args.dataDir),
+    tempName: ".config.json",
+    value: pruneManagedConfig(args.config),
   });
 }
 
@@ -1233,10 +1175,43 @@ function validateManagedConfigForWrite(config: ManagedConfigForWrite): void {
 }
 
 async function writeManagedConfig(args: WriteManagedConfigArgs): Promise<void> {
-  validateManagedConfigForWrite(args.config);
-  await mutateManagedConfig(args.dataDir, (current) =>
-    mergeManagedConfig(current, args.config),
-  );
+  const existingConfig = await readManagedConfigForWrite({
+    dataDir: args.dataDir,
+  });
+  await writeManagedConfigFile({
+    config: mergeManagedConfig(existingConfig, args.config),
+    dataDir: args.dataDir,
+  });
+}
+
+async function writeManagedEnv(args: WriteManagedEnvFileArgs): Promise<void> {
+  const existingConfig = await readManagedEnvFile({ dataDir: args.dataDir });
+  await writeManagedEnvFile({
+    config: mergeManagedEnvFile(existingConfig, args.config),
+    dataDir: args.dataDir,
+  });
+}
+
+async function writeManagedEnvFile(
+  args: WriteManagedEnvFileArgs,
+): Promise<void> {
+  await writeJsonFileAtomically({
+    dataDir: args.dataDir,
+    path: formatBbAppEnvPath(args.dataDir),
+    tempName: ".env.json",
+    value: pruneManagedEnvFile(args.config),
+  });
+}
+
+async function writeClientConfigFile(
+  args: WriteClientConfigFileArgs,
+): Promise<void> {
+  await writeJsonFileAtomically({
+    dataDir: args.dataDir,
+    path: formatClientConfigPath(args.dataDir),
+    tempName: ".client.json",
+    value: args.config,
+  });
 }
 
 const BB_APP_VERSION_DEV_FALLBACK = "0.0.0-dev";
@@ -1867,9 +1842,13 @@ async function runConfigCommand(args: RunConfigCommandArgs): Promise<void> {
       throw new Error("Usage: bb-app config unset <key>");
     }
     const key = resolveManagedConfigKey(commandArgs[1]);
-    await mutateManagedConfig(args.dataDir, (current) =>
-      unsetManagedConfigKey(current, key),
-    );
+    const currentConfig = await readManagedConfigForWrite({
+      dataDir: args.dataDir,
+    });
+    await writeManagedConfigFile({
+      config: unsetManagedConfigKey(currentConfig, key),
+      dataDir: args.dataDir,
+    });
     process.stdout.write(
       `Unset ${key} in ${formatBbAppConfigPath(args.dataDir)}\n`,
     );
@@ -1915,9 +1894,11 @@ async function runEnvCommand(args: RunEnvCommandArgs): Promise<void> {
       throw new Error("Usage: bb-app env unset <key>");
     }
     const key = resolveManagedEnvKey(commandArgs[1]);
-    await mutateManagedEnv(args.dataDir, (current) =>
-      unsetManagedEnvKey(current, key),
-    );
+    const currentConfig = await readManagedEnvFile({ dataDir: args.dataDir });
+    await writeManagedEnvFile({
+      config: unsetManagedEnvKey(currentConfig, key),
+      dataDir: args.dataDir,
+    });
     process.stdout.write(
       `Unset ${key} in ${formatBbAppEnvPath(args.dataDir)}\n`,
     );
@@ -1936,10 +1917,10 @@ async function runEnvCommand(args: RunEnvCommandArgs): Promise<void> {
   if (key === "BB_SERVER_BIND_HOST") {
     parseServerBindHost(value);
   }
-  const patch = createManagedEnvPatch(key, value);
-  await mutateManagedEnv(args.dataDir, (current) =>
-    mergeManagedEnvFile(current, patch),
-  );
+  await writeManagedEnv({
+    config: createManagedEnvPatch(key, value),
+    dataDir: args.dataDir,
+  });
   process.stdout.write(`Set ${key} in ${formatBbAppEnvPath(args.dataDir)}\n`);
   await refreshRunningServerConfigAfterWrite(args.serverUrl, "env", key);
 }
@@ -1989,9 +1970,16 @@ async function runClientCommand(args: RunClientCommandArgs): Promise<void> {
       ...(args.hostId !== undefined ? { requestedHostId: args.hostId } : {}),
       serverOrigin,
     });
-    await mutateClientConfig(args.dataDir, (current) =>
-      setClientSshTarget(current, serverOrigin, hostId, sshAuthority),
+    const nextConfig = setClientSshTarget(
+      await readClientConfig({ dataDir: args.dataDir }),
+      serverOrigin,
+      hostId,
+      sshAuthority,
     );
+    await writeClientConfigFile({
+      config: nextConfig,
+      dataDir: args.dataDir,
+    });
     process.stdout.write(
       `Set client SSH target in ${formatClientConfigPath(args.dataDir)}\n`,
     );
@@ -2004,9 +1992,14 @@ async function runClientCommand(args: RunClientCommandArgs): Promise<void> {
         "Usage: bb-app client ssh-target remove <server-origin> [--host-id <id>]",
       );
     }
-    await mutateClientConfig(args.dataDir, (current) =>
-      removeClientSshTarget(current, commandArgs[2], args.hostId),
-    );
+    await writeClientConfigFile({
+      config: removeClientSshTarget(
+        await readClientConfig({ dataDir: args.dataDir }),
+        commandArgs[2],
+        args.hostId,
+      ),
+      dataDir: args.dataDir,
+    });
     process.stdout.write(
       `Removed client SSH target from ${formatClientConfigPath(args.dataDir)}\n`,
     );
@@ -2471,36 +2464,6 @@ function resolveHostDaemonServerUrl(
   return toOptionalString(args.env.BB_SERVER_URL) ?? args.context.serverUrl;
 }
 
-export async function resolveMovedDaemonLaunch(
-  args: ResolveMovedDaemonLaunchArgs,
-): Promise<MovedDaemonLaunch> {
-  const options: LauncherCliOptions = { ...args.options };
-  delete options.serverUrl;
-  const runtime = await resolveBbAppRuntimeState({
-    entrypointUrl: args.entrypointUrl,
-    env: args.env,
-    homeDir: args.homeDir,
-    options,
-    serverUrlMode: "managed",
-    ...(args.worktreePolicy === null
-      ? {}
-      : { worktreePolicy: args.worktreePolicy }),
-  });
-  const serverUrl = runtime.config.serverUrl ?? args.movedFile.serverUrl;
-  return {
-    context: runtime.context,
-    env: createDaemonEnv({
-      context: runtime.context,
-      env: createSharedEnv({
-        context: runtime.context,
-        env: stripThreadContextEnv(runtime.env),
-      }),
-      serverUrl,
-    }),
-    serverUrl,
-  };
-}
-
 function resolveEnrollmentRequirements(
   args: ResolveEnrollmentRequirementsArgs,
 ): EnrollmentRequirements {
@@ -2639,7 +2602,6 @@ Usage:
   bb-server [--data-dir <path>] [--server-bind-host <host>] [--server-port <port>]
 
 Service stdout and stderr append to <data-dir>/logs/server-stdio.log.
-Exits with code 3 without starting when the server on this data directory moved to another machine, unless a move back to this computer is in progress.
 `);
     return;
   }
@@ -2654,14 +2616,6 @@ Exits with code 3 without starting when the server on this data directory moved 
     options: parsedArgs.options,
     serverUrlMode: "local",
   });
-  const movedFile = await readBbServerMoveRefusal({
-    dataDir: runtime.context.dataDir,
-  });
-  if (movedFile !== null) {
-    process.stderr.write(`${formatServerMovedNotice(movedFile)}\n`);
-    process.exitCode = BB_SERVER_MOVED_EXIT_CODE;
-    return;
-  }
   await assertConfiguredServerBindHost({
     optionServerBindHost: parsedArgs.options.serverBindHost,
     runtime,
@@ -2920,13 +2874,17 @@ export async function startFullStackServerProcess(
   }
 }
 
-async function startDaemonProcess(
-  args: StartDaemonProcessArgs,
+async function startFullStackDaemonProcess(
+  args: StartFullStackDaemonProcessArgs,
 ): Promise<ManagedProcessRun> {
   const daemonRun = spawnNamedManagedProcess({
     args: [args.context.daemonEntry],
     command: process.execPath,
-    env: args.env,
+    env: createDaemonEnv({
+      context: args.context,
+      env: args.autoJoinEnv,
+      serverUrl: args.context.serverUrl,
+    }),
     logDir: args.context.logDir,
     processName: "daemon",
   });
@@ -2935,12 +2893,12 @@ async function startDaemonProcess(
   try {
     const expectedHostId = await requireExpectedHostDaemonId({
       dataDir: args.context.dataDir,
-      env: args.env,
+      env: args.autoJoinEnv,
     });
     await waitForHostDaemonStatus({
       childProcess: daemonRun.childProcess,
       expectedHostId,
-      expectedServerUrl: args.serverUrl,
+      expectedServerUrl: args.context.serverUrl,
       port: args.context.daemonPort,
     });
     return daemonRun;
@@ -3005,60 +2963,14 @@ export async function terminateManagedFullStackProcesses(
   await Promise.all(terminationPromises);
 }
 
-async function waitForServerExitWhileMoved(
-  args: WaitForServerExitWhileMovedArgs,
-): Promise<NamedProcessExitResult | null> {
-  const serverExit = args.serverRun.exit.then(
-    (exit): NamedProcessExitResult | null => exit,
-  );
-  let waitedMs = 0;
-  while (!args.isShutdownRequested()) {
-    const exit = await Promise.race([
-      serverExit,
-      args
-        .delayMilliseconds({ ms: MOVED_SERVER_EXIT_POLL_INTERVAL_MS })
-        .then(() => null),
-    ]);
-    if (exit !== null) {
-      return exit;
-    }
-    if ((await args.readServerMovedFile()) === null) {
-      return null;
-    }
-    waitedMs += MOVED_SERVER_EXIT_POLL_INTERVAL_MS;
-    if (waitedMs >= MOVED_SERVER_EXIT_GRACE_MS) {
-      log(
-        yellow("!"),
-        `server did not stop within ${String(MOVED_SERVER_EXIT_GRACE_MS / 1_000)}s after the move - stopping it`,
-      );
-      await args.serverRun.terminate("SIGTERM");
-      return await serverExit;
-    }
-  }
-  return null;
-}
-
 export async function superviseFullStackProcesses(
   args: SuperviseFullStackProcessesArgs,
 ): Promise<FullStackSupervisionResult> {
   while (!args.isShutdownRequested()) {
     const serverRun = args.processes.serverRun;
-    if (serverRun === null) {
-      return "stopped";
-    }
     const daemonRun = args.processes.daemonRun;
-    if (daemonRun === null) {
-      const restartedDaemon = await restartManagedProcess({
-        context: args.context,
-        delayMilliseconds: args.delayMilliseconds,
-        isShutdownRequested: args.isShutdownRequested,
-        processName: "daemon",
-        start: args.startDaemon,
-      });
-      if (restartedDaemon === null) {
-        return "shutdown";
-      }
-      continue;
+    if (serverRun === null || daemonRun === null) {
+      return "stopped";
     }
 
     const exitedProcess = await Promise.race([serverRun.exit, daemonRun.exit]);
@@ -3066,424 +2978,77 @@ export async function superviseFullStackProcesses(
       return "shutdown";
     }
 
-    let serverExitResult = exitedProcess.result;
-    if (exitedProcess.processName === "daemon") {
-      if (args.processes.daemonRun === daemonRun) {
-        args.processes.daemonRun = null;
+    if (exitedProcess.processName === "server") {
+      if (args.processes.serverRun === serverRun) {
+        args.processes.serverRun = null;
       }
-      if ((await args.readServerMovedFile()) === null) {
+      if (
+        await (args.isHealthyServerAnswering ?? isHealthyServerAnswering)(
+          `${args.context.serverUrl}/health`,
+        )
+      ) {
         log(
           yellow("!"),
-          `host daemon exited with ${formatProcessExitResult(
+          `${formatManagedProcessLabel(exitedProcess.processName)} exited with ${formatProcessExitResult(
             exitedProcess.result,
-          )} - restarting host daemon`,
+          )} - another server is healthy; stopping host daemon`,
         );
-        await args.delayMilliseconds({
-          ms: MANAGED_PROCESS_RESTART_RETRY_DELAY_MS,
+        await terminateManagedFullStackProcesses({
+          processes: args.processes,
+          signal: "SIGTERM",
         });
-        continue;
+        return "stopped";
       }
-      log(
-        yellow("!"),
-        `host daemon exited with ${formatProcessExitResult(
-          exitedProcess.result,
-        )} - the server is moving; waiting for it to stop`,
-      );
-      const movedServerExit = await waitForServerExitWhileMoved({
-        delayMilliseconds: args.delayMilliseconds,
-        isShutdownRequested: args.isShutdownRequested,
-        readServerMovedFile: args.readServerMovedFile,
-        serverRun,
-      });
-      if (movedServerExit === null || args.isShutdownRequested()) {
-        continue;
-      }
-      serverExitResult = movedServerExit.result;
-    }
-
-    if (args.processes.serverRun === serverRun) {
-      args.processes.serverRun = null;
-    }
-    const movedFile = await args.readServerMovedFile();
-    if (movedFile !== null) {
-      return args.onServerMoved(movedFile);
-    }
-    if (
-      await (args.isHealthyServerAnswering ?? isHealthyServerAnswering)(
-        `${args.context.serverUrl}/health`,
-      )
-    ) {
-      log(
-        yellow("!"),
-        `server exited with ${formatProcessExitResult(
-          serverExitResult,
-        )} - another server is healthy; stopping host daemon`,
-      );
-      await terminateManagedFullStackProcesses({
-        processes: args.processes,
-        signal: "SIGTERM",
-      });
-      return "stopped";
     }
 
     log(
       yellow("!"),
-      `server exited with ${formatProcessExitResult(
-        serverExitResult,
-      )} - restarting server`,
+      `${formatManagedProcessLabel(exitedProcess.processName)} exited with ${formatProcessExitResult(
+        exitedProcess.result,
+      )} - restarting ${formatManagedProcessLabel(exitedProcess.processName)}`,
     );
+
+    if (exitedProcess.processName === "server") {
+      await args.delayMilliseconds({
+        ms: MANAGED_PROCESS_RESTART_RETRY_DELAY_MS,
+      });
+      if (args.isShutdownRequested()) {
+        return "shutdown";
+      }
+      const restartedServer = await restartManagedProcess({
+        context: args.context,
+        delayMilliseconds: args.delayMilliseconds,
+        isShutdownRequested: args.isShutdownRequested,
+        processName: "server",
+        start: args.startServer,
+      });
+      if (restartedServer === null) {
+        return "shutdown";
+      }
+      continue;
+    }
+
+    if (args.processes.daemonRun === daemonRun) {
+      args.processes.daemonRun = null;
+    }
     await args.delayMilliseconds({
       ms: MANAGED_PROCESS_RESTART_RETRY_DELAY_MS,
     });
     if (args.isShutdownRequested()) {
       return "shutdown";
     }
-    const restartedServer = await restartManagedProcess({
-      context: args.context,
-      delayMilliseconds: args.delayMilliseconds,
-      isShutdownRequested: args.isShutdownRequested,
-      processName: "server",
-      start: args.startServer,
-    });
-    if (restartedServer === null) {
-      return "shutdown";
-    }
-  }
-  return "shutdown";
-}
-
-export async function readServerMoveMarkers(
-  args: ReadServerMoveMarkersArgs,
-): Promise<ServerMoveMarkers> {
-  const [movedFile, importFile] = await Promise.all([
-    readServerMovedFile(args.dataDir),
-    readServerImportFile(args.dataDir),
-  ]);
-  return { movedFile, pendingMoveImport: importFile?.kind === "move" };
-}
-
-async function readBbServerMoveRefusal(
-  args: ReadServerMoveMarkersArgs,
-): Promise<ServerMovedFile | null> {
-  const markers = await readServerMoveMarkers(args);
-  return markers.pendingMoveImport ? null : markers.movedFile;
-}
-
-function isServerUnlockedByMarkers(markers: ServerMoveMarkers): boolean {
-  return markers.movedFile === null && !markers.pendingMoveImport;
-}
-
-async function superviseMovedDaemonProcess(
-  args: SuperviseMovedDaemonProcessArgs,
-): Promise<void> {
-  while (!args.isMovedModeOver()) {
-    const daemonRun = args.processes.daemonRun;
-    if (daemonRun !== null) {
-      const exitedDaemon = await daemonRun.exit;
-      if (args.processes.daemonRun === daemonRun) {
-        args.processes.daemonRun = null;
-      }
-      if (args.isMovedModeOver() || (await args.isServerUnlocked())) {
-        return;
-      }
-      log(
-        yellow("!"),
-        `host daemon exited with ${formatProcessExitResult(
-          exitedDaemon.result,
-        )} - restarting host daemon`,
-      );
-      await args.delayMilliseconds({
-        ms: MANAGED_PROCESS_RESTART_RETRY_DELAY_MS,
-      });
-      if (args.isMovedModeOver()) {
-        return;
-      }
-    }
     const restartedDaemon = await restartManagedProcess({
       context: args.context,
       delayMilliseconds: args.delayMilliseconds,
-      isShutdownRequested: args.isMovedModeOver,
+      isShutdownRequested: args.isShutdownRequested,
       processName: "daemon",
       start: args.startDaemon,
     });
     if (restartedDaemon === null) {
-      return;
+      return "shutdown";
     }
   }
-}
-
-function printMovedModeReadyOutput(args: PrintMovedModeReadyOutputArgs): void {
-  process.stdout.write("\n");
-  log(green("●"), bold("bb is running as a regular machine"));
-  process.stdout.write("\n");
-  log(" ", formatReadyOutputRow("server", cyan(args.movedFile.serverUrl)));
-  log(" ", formatReadyOutputRow("daemon", String(args.context.daemonPort)));
-  log(" ", formatReadyOutputRow("data", args.context.dataDir));
-  log(" ", formatReadyOutputRow("logs", `${args.context.logDir}/`));
-  log(" ", formatReadyOutputRow("lock", args.context.daemonLockFile));
-  process.stdout.write("\n");
-  log(" ", dim("Press Ctrl+C to stop"));
-}
-
-export async function runMovedMode(
-  args: RunMovedModeArgs,
-): Promise<MovedModeResult> {
-  log(yellow("!"), formatServerMovedNotice(args.movedFile));
-  await terminateManagedFullStackProcesses({
-    processes: args.processes,
-    signal: "SIGTERM",
-  });
-  args.processes.serverRun = null;
-  args.processes.daemonRun = null;
-
-  const responderUrl = resolveServerListenerUrl({
-    bindHost: args.bindHost,
-    port: args.context.serverPort,
-  });
-  let responder: MovedResponder | null = null;
-  let lastProblem: string | null = null;
-  let leaving = false;
-  let watching = true;
-  let stopWatching = (): void => undefined;
-  const watchingStopped = new Promise<void>((resolvePromise) => {
-    stopWatching = () => {
-      watching = false;
-      resolvePromise();
-    };
-  });
-  const isMovedModeOver = (): boolean => args.isShutdownRequested() || leaving;
-  const reportProblem = (message: string): void => {
-    if (message !== lastProblem) {
-      lastProblem = message;
-      log(yellow("!"), message);
-    }
-  };
-  const readMarkers = async (): Promise<ServerMoveMarkers | null> => {
-    try {
-      return await args.readServerMoveMarkers();
-    } catch (error) {
-      reportProblem(
-        `Could not read the server move markers in ${args.context.dataDir}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return null;
-    }
-  };
-  const isServerUnlocked = async (): Promise<boolean> => {
-    const markers = await readMarkers();
-    if (markers !== null && isServerUnlockedByMarkers(markers)) {
-      leaving = true;
-    }
-    return leaving;
-  };
-  const closeResponder = async (): Promise<boolean> => {
-    const current = responder;
-    responder = null;
-    if (current === null) {
-      return false;
-    }
-    await current.close();
-    return true;
-  };
-  const syncResponder = async (): Promise<void> => {
-    const markers = await readMarkers();
-    if (markers === null) {
-      return;
-    }
-    if (markers.pendingMoveImport) {
-      if (await closeResponder()) {
-        log(
-          dim("●"),
-          `Released ${responderUrl} for the server moving to this computer`,
-        );
-      }
-      return;
-    }
-    if (markers.movedFile === null) {
-      leaving = true;
-      return;
-    }
-    if (responder !== null) {
-      return;
-    }
-    responder = await args.startResponder({
-      bindHost: args.bindHost,
-      movedFile: markers.movedFile,
-      onError: (error) => {
-        reportProblem(
-          `Could not answer at ${responderUrl} with the new server address: ${error.message}`,
-        );
-      },
-      port: args.context.serverPort,
-    });
-    if (responder !== null) {
-      lastProblem = null;
-      log(
-        green("✓"),
-        `Answering at ${cyan(responderUrl)} with the new server address`,
-      );
-    }
-  };
-  const watchMarkers = async (): Promise<void> => {
-    while (watching && !args.isShutdownRequested()) {
-      await Promise.race([args.waitForMarkerPoll(), watchingStopped]);
-      if (!watching || args.isShutdownRequested()) {
-        return;
-      }
-      if (!leaving) {
-        await syncResponder();
-      }
-      if (leaving) {
-        await closeResponder();
-        await terminateManagedFullStackProcesses({
-          processes: args.processes,
-          signal: "SIGTERM",
-        });
-      }
-    }
-  };
-
-  await syncResponder();
-  const watcher = watchMarkers();
-  try {
-    if (!isMovedModeOver()) {
-      beginStep("Starting host daemon");
-      try {
-        await args.startDaemon();
-        endStep(green("✓"), "Host daemon running");
-        printMovedModeReadyOutput({
-          context: args.context,
-          movedFile: args.movedFile,
-        });
-      } catch {
-        if (!isMovedModeOver()) {
-          endStep(red("✗"), "Host daemon failed to start");
-          logManagedProcessStartupFailureContext({
-            context: args.context,
-            processName: "daemon",
-          });
-        }
-      }
-      await superviseMovedDaemonProcess({
-        context: args.context,
-        delayMilliseconds: args.delayMilliseconds,
-        isMovedModeOver,
-        isServerUnlocked,
-        processes: args.processes,
-        startDaemon: args.startDaemon,
-      });
-    }
-  } finally {
-    stopWatching();
-    await watcher;
-    await closeResponder();
-    if (leaving) {
-      await terminateManagedFullStackProcesses({
-        processes: args.processes,
-        signal: "SIGTERM",
-      });
-      args.processes.daemonRun = null;
-    }
-  }
-
-  if (args.isShutdownRequested()) {
-    return "shutdown";
-  }
-  log(
-    yellow("!"),
-    "The server lock was removed - starting the bb server on this computer",
-  );
-  return "unlocked";
-}
-
-export async function superviseBbAppStart(
-  args: SuperviseBbAppStartArgs,
-): Promise<FullStackSupervisionResult> {
-  const runFullStack = async (
-    entry: FullStackEntry,
-  ): Promise<FullStackSupervisionResult> => {
-    const starters = await args.prepareFullStack(entry);
-    beginStep("Starting server");
-    try {
-      await starters.startServer();
-    } catch (error) {
-      endStep(red("✗"), "Server failed to start");
-      log(" ", dim(error instanceof Error ? error.message : String(error)));
-      logManagedProcessStartupFailureContext({
-        context: args.context,
-        processName: "server",
-      });
-      process.exitCode = 1;
-      await args.shutdown("SIGTERM");
-      return "stopped";
-    }
-
-    endStep(green("✓"), `Server listening on ${cyan(args.serverListenerUrl)}`);
-
-    beginStep("Starting host daemon");
-    const startDaemon = await starters.prepareDaemon();
-    try {
-      await startDaemon();
-    } catch {
-      endStep(red("✗"), "Host daemon failed to start");
-      logManagedProcessStartupFailureContext({
-        context: args.context,
-        processName: "daemon",
-      });
-      process.exitCode = 1;
-      await args.shutdown("SIGTERM");
-      return "stopped";
-    }
-
-    endStep(green("✓"), "Host daemon running");
-
-    process.stdout.write("\n");
-    log(green("●"), bold("bb is ready"));
-    process.stdout.write("\n");
-    log(" ", formatReadyOutputRow("app", cyan(args.serverListenerUrl)));
-    log(" ", formatReadyOutputRow("daemon", String(args.context.daemonPort)));
-    log(" ", formatReadyOutputRow("data", args.context.dataDir));
-    log(" ", formatReadyOutputRow("db", args.context.dbPath));
-    log(" ", formatReadyOutputRow("logs", `${args.context.logDir}/`));
-    log(" ", formatReadyOutputRow("lock", args.context.daemonLockFile));
-    process.stdout.write("\n");
-    log(" ", dim("Press Ctrl+C to stop"));
-
-    return superviseFullStackProcesses({
-      context: args.context,
-      delayMilliseconds: args.delayMilliseconds,
-      isShutdownRequested: args.isShutdownRequested,
-      onServerMoved: enterMovedMode,
-      processes: args.processes,
-      readServerMovedFile: args.readServerMovedFile,
-      startDaemon,
-      startServer: starters.startServer,
-    });
-  };
-
-  const enterMovedMode = async (
-    movedFile: ServerMovedFile,
-  ): Promise<FullStackSupervisionResult> => {
-    const movedModeResult = await runMovedMode({
-      bindHost: args.serverBindHost,
-      context: args.context,
-      delayMilliseconds: args.delayMilliseconds,
-      isShutdownRequested: args.isShutdownRequested,
-      movedFile,
-      processes: args.processes,
-      readServerMoveMarkers: args.readServerMoveMarkers,
-      startDaemon: () => args.startMovedDaemon(movedFile),
-      startResponder: args.startMovedResponder,
-      waitForMarkerPoll: args.waitForMarkerPoll,
-    });
-    return movedModeResult === "shutdown"
-      ? "shutdown"
-      : runFullStack("unlocked");
-  };
-
-  const initialMovedFile = await args.readServerMovedFile();
-  return initialMovedFile === null
-    ? runFullStack("startup")
-    : enterMovedMode(initialMovedFile);
+  return "shutdown";
 }
 
 export async function completeFullStackSupervision(
@@ -3668,40 +3233,18 @@ export async function runBbApp(
   assertBbAppArtifacts(runtime.context);
 
   const context = runtime.context;
-  const serverBindHost = parseServerBindHost(
-    runtime.serverEnv.BB_SERVER_BIND_HOST ?? BB_LOOPBACK_HOST,
-  );
   const serverListenerUrl = resolveServerListenerUrl({
-    bindHost: serverBindHost,
+    bindHost: runtime.serverEnv.BB_SERVER_BIND_HOST,
     port: context.serverPort,
   });
-  const resolveFullStackRuntime = async (
-    entry: FullStackEntry,
-  ): Promise<BbAppRuntimeState> => {
-    if (entry === "startup") {
-      return runtime;
-    }
-    const current = await resolveBbAppRuntimeState({
-      entrypointUrl: import.meta.url,
-      env: process.env,
-      homeDir: homedir(),
-      options: parsedArgs.options,
-      serverUrlMode: "local",
-      ...(options.worktreePolicy === null
-        ? {}
-        : { worktreePolicy: options.worktreePolicy }),
-    });
-    const serverEnv: NodeJS.ProcessEnv = { ...current.serverEnv };
-    delete serverEnv.BB_SERVER_BIND_HOST;
-    const startupBindHost = runtime.serverEnv.BB_SERVER_BIND_HOST;
-    return {
-      ...current,
-      serverEnv:
-        startupBindHost === undefined
-          ? serverEnv
-          : { ...serverEnv, BB_SERVER_BIND_HOST: startupBindHost },
-    };
-  };
+  const serverEnv = createServerEnv({
+    context,
+    env: runtime.serverEnv,
+  });
+  const sharedEnv = createSharedEnv({
+    context,
+    env: stripThreadContextEnv(runtime.env),
+  });
 
   process.stdout.write(`\n  ${bold("bb")}\n\n`);
 
@@ -3743,6 +3286,16 @@ export async function runBbApp(
     })();
     return shutdownPromise;
   };
+  const startServer = (): Promise<ManagedProcessRun> =>
+    startFullStackServerProcess({
+      ...(options.beforeServerStart === undefined
+        ? {}
+        : { beforeStart: options.beforeServerStart }),
+      context,
+      env: serverEnv,
+      processes,
+    });
+
   const removeSignalForwarding = installTerminationSignalForwarding(
     (signal) => {
       void shutdown(signal);
@@ -3750,77 +3303,70 @@ export async function runBbApp(
   );
 
   try {
-    const supervisionResult = await superviseBbAppStart({
+    beginStep("Starting server");
+    try {
+      await startServer();
+    } catch (error) {
+      endStep(red("✗"), "Server failed to start");
+      log(" ", dim(error instanceof Error ? error.message : String(error)));
+      logManagedProcessStartupFailureContext({
+        context,
+        processName: "server",
+      });
+      process.exitCode = 1;
+      await shutdown("SIGTERM");
+      return;
+    }
+
+    endStep(green("✓"), `Server listening on ${cyan(serverListenerUrl)}`);
+
+    beginStep("Starting host daemon");
+    const autoJoinEnv = await maybeAddAutoJoinEnv({
+      dataDir: context.dataDir,
+      env: sharedEnv,
+      serverUrl: context.serverUrl,
+    });
+    const startDaemon = (): Promise<ManagedProcessRun> =>
+      startFullStackDaemonProcess({
+        autoJoinEnv,
+        context,
+        processes,
+      });
+
+    try {
+      await startDaemon();
+    } catch {
+      endStep(red("✗"), "Host daemon failed to start");
+      logManagedProcessStartupFailureContext({
+        context,
+        processName: "daemon",
+      });
+      process.exitCode = 1;
+      await shutdown("SIGTERM");
+      return;
+    }
+
+    endStep(green("✓"), "Host daemon running");
+
+    process.stdout.write("\n");
+    log(green("●"), bold("bb is ready"));
+    process.stdout.write("\n");
+    log(" ", formatReadyOutputRow("app", cyan(serverListenerUrl)));
+    log(" ", formatReadyOutputRow("daemon", String(context.daemonPort)));
+    log(" ", formatReadyOutputRow("data", context.dataDir));
+    log(" ", formatReadyOutputRow("db", context.dbPath));
+    log(" ", formatReadyOutputRow("logs", `${context.logDir}/`));
+    log(" ", formatReadyOutputRow("lock", context.daemonLockFile));
+    process.stdout.write("\n");
+    log(" ", dim("Press Ctrl+C to stop"));
+
+    const supervisionResult = await superviseFullStackProcesses({
       context,
       delayMilliseconds,
       isShutdownRequested,
-      prepareFullStack: async (entry) => {
-        const fullStackRuntime = await resolveFullStackRuntime(entry);
-        const serverEnv = createServerEnv({
-          context,
-          env: fullStackRuntime.serverEnv,
-        });
-        const sharedEnv = createSharedEnv({
-          context,
-          env: stripThreadContextEnv(fullStackRuntime.env),
-        });
-        return {
-          prepareDaemon: async () => {
-            const autoJoinEnv = await maybeAddAutoJoinEnv({
-              dataDir: context.dataDir,
-              env: sharedEnv,
-              serverUrl: context.serverUrl,
-            });
-            const daemonEnv = createDaemonEnv({
-              context,
-              env: autoJoinEnv,
-              serverUrl: context.serverUrl,
-            });
-            return () =>
-              startDaemonProcess({
-                context,
-                env: daemonEnv,
-                processes,
-                serverUrl: context.serverUrl,
-              });
-          },
-          startServer: () =>
-            startFullStackServerProcess({
-              ...(options.beforeServerStart === undefined
-                ? {}
-                : { beforeStart: options.beforeServerStart }),
-              context,
-              env: serverEnv,
-              processes,
-            }),
-        };
-      },
       processes,
-      readServerMoveMarkers: () =>
-        readServerMoveMarkers({ dataDir: context.dataDir }),
-      readServerMovedFile: () => readServerMovedFile(context.dataDir),
-      serverBindHost,
-      serverListenerUrl,
-      shutdown,
-      startMovedDaemon: async (movedFile) => {
-        const launch = await resolveMovedDaemonLaunch({
-          entrypointUrl: import.meta.url,
-          env: process.env,
-          homeDir: homedir(),
-          movedFile,
-          options: parsedArgs.options,
-          worktreePolicy: options.worktreePolicy,
-        });
-        return startDaemonProcess({
-          context: launch.context,
-          env: launch.env,
-          processes,
-          serverUrl: launch.serverUrl,
-        });
-      },
-      startMovedResponder,
-      waitForMarkerPoll: () =>
-        delayMilliseconds({ ms: MOVED_MODE_MARKER_POLL_INTERVAL_MS }),
+      startDaemon,
+      startServer,
     });
     await completeFullStackSupervision({ shutdownPromise, supervisionResult });
   } catch (error) {

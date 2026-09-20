@@ -77,7 +77,6 @@ export const EXTENDED_ICON_NAMES = [
   "Minimize2",
   "MoveTo",
   "NewTab",
-  "News01",
   "PackageReceive",
   "Palette",
   "PanelBottom",

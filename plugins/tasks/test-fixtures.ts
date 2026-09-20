@@ -15,8 +15,6 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
     position: 0,
     createdAt: "2026-07-15T00:00:00.000Z",
     updatedAt: "2026-07-15T00:00:00.000Z",
-    archivedAt: null,
-    closedAt: null,
     labelIds: [],
     ...overrides,
   };

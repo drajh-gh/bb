@@ -54,10 +54,8 @@ export function formatScheduledTime({
   });
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
-  const startOfTarget = new Date(timestamp);
-  startOfTarget.setHours(0, 0, 0, 0);
-  const daysAhead = Math.round(
-    (startOfTarget.getTime() - startOfToday.getTime()) / DAY_MS,
+  const daysAhead = Math.floor(
+    (target.getTime() - startOfToday.getTime()) / DAY_MS,
   );
   if (daysAhead === 0) {
     return clock;

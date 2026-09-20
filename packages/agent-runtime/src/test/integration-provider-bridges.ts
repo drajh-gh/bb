@@ -9,9 +9,10 @@ import {
 } from "@bb/domain";
 import type { AgentRuntimeBridgeLaunch } from "../types.js";
 
-export function integrationProviderBridgeManifestPath(): string {
-  return join(tmpdir(), "bb-agent-runtime-integration-provider-bridges.json");
-}
+export const INTEGRATION_PROVIDER_BRIDGE_MANIFEST_PATH = join(
+  tmpdir(),
+  "bb-agent-runtime-integration-provider-bridges.json",
+);
 
 const bridgeLaunchSchema = z.object({
   pluginId: z.string(),
@@ -45,10 +46,10 @@ function readManifest(): IntegrationProviderBridgeManifest {
   }
   let raw: string;
   try {
-    raw = readFileSync(integrationProviderBridgeManifestPath(), "utf8");
+    raw = readFileSync(INTEGRATION_PROVIDER_BRIDGE_MANIFEST_PATH, "utf8");
   } catch {
     throw new Error(
-      `No provider bridge manifest at ${integrationProviderBridgeManifestPath()}. ` +
+      `No provider bridge manifest at ${INTEGRATION_PROVIDER_BRIDGE_MANIFEST_PATH}. ` +
         `Integration tests must run through vitest.integration.config.ts, whose ` +
         `global setup builds the first-party bridge artifacts.`,
     );

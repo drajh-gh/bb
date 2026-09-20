@@ -147,8 +147,7 @@ export function beginSidebarPaneContentSplitDrag({
   beginSplitDrag({
     ghostLabel: label,
     sourceEl: rowEl,
-    fadeSourceOnEngage: false,
-    renderGhost: false,
+    cancelSidebarReorderOnEngage: true,
     ...(fallback ? { fallback } : {}),
     shouldEngage: (x, y) =>
       shouldEngageSidebarSplitDrag({

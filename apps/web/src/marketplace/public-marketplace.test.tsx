@@ -49,24 +49,7 @@ describe("public marketplace route rendering", () => {
     );
     expect(html).not.toContain("marketplace-category-pill");
     expect(html).not.toContain("marketplace-category-filters");
-    expect(html).toContain("mask-image");
-    expect(html).toContain("marketplace-svg-icon");
-  });
-
-  it("keeps raster artwork as an image", () => {
-    const entry = {
-      ...MARKETPLACE_V2_FIXTURE.plugins[0]!,
-      icon: { url: "https://example.com/icon.png" },
-    };
-    const html = renderToStaticMarkup(
-      <PublicMarketplaceDetailPage
-        manifest={{ ...MARKETPLACE_V2_FIXTURE, plugins: [entry] }}
-        entry={entry}
-        stats={null}
-      />,
-    );
-    expect(html).toContain('<img src="https://example.com/icon.png"');
-    expect(html).not.toContain("marketplace-svg-icon");
+    expect(html).not.toContain("mask-image");
   });
 
   it("filters the marketplace route to one selected category", () => {

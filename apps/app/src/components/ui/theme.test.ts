@@ -261,7 +261,10 @@ describe("theme.css Cadence text tokens", () => {
 
 describe("theme.css terminal font token", () => {
   it("provides the existing terminal font stack as the default", () => {
-    const fontFamily = variableValue(modeBlock("light"), "font-terminal");
+    const fontFamily = variableValue(
+      modeBlock("light"),
+      "font-terminal",
+    );
 
     expect(fontFamily).toContain('"JetBrainsMono Nerd Font Mono"');
     expect(fontFamily).toContain('"Courier New", monospace');
@@ -336,5 +339,22 @@ describe("theme.css shimmer and scroll-anchor paint scope", () => {
     expect(ruleBody(".scroll-bottom-anchor")).toMatch(
       /overflow-anchor:\s*auto;/,
     );
+  });
+});
+
+describe("plugin utilities layer order", () => {
+  const statement = /@layer\s+([^;]+);/.exec(css);
+
+  it("names the plugin utilities layer ahead of the app's own", () => {
+    expect(statement).not.toBeNull();
+    const names = statement![1].split(",").map((name) => name.trim());
+    expect(names).toContain("bb-plugin-utilities");
+    expect(names.indexOf("bb-plugin-utilities")).toBeLessThan(
+      names.indexOf("utilities"),
+    );
+  });
+
+  it("declares the order before the Tailwind import that would fix it first", () => {
+    expect(statement!.index).toBeLessThan(css.indexOf('@import "tailwindcss"'));
   });
 });

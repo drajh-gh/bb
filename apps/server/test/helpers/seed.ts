@@ -196,7 +196,6 @@ export function seedThread(
     title?: string | null;
     parentThreadId?: string | null;
     sourceThreadId?: string | null;
-    lifecycleOwnerThreadId?: string | null;
     originKind?: ThreadOriginKind | null;
     originPluginId?: string | null;
     titleFallback?: string | null;
@@ -212,7 +211,6 @@ export function seedThread(
     titleFallback: args.titleFallback ?? "Test Thread",
     parentThreadId: args.parentThreadId ?? null,
     sourceThreadId: args.sourceThreadId ?? null,
-    lifecycleOwnerThreadId: args.lifecycleOwnerThreadId ?? null,
     originKind: args.originKind ?? null,
     originPluginId: args.originPluginId ?? null,
     visibility: args.visibility ?? "visible",
@@ -320,30 +318,6 @@ export function seedTurnStarted(
     type: "turn/started",
     scope: turnScope(args.turnId),
     data: { providerThreadId },
-  });
-}
-
-export function seedThreadIdentity(
-  deps: Pick<AppDeps, "db" | "hub">,
-  args: {
-    createdAt?: number;
-    environmentId?: string | null;
-    providerThreadId: string;
-    sequence?: number;
-    threadId: string;
-  },
-): void {
-  seedEvent(deps, {
-    threadId: args.threadId,
-    environmentId: args.environmentId ?? null,
-    providerThreadId: args.providerThreadId,
-    createdAt: args.createdAt,
-    sequence:
-      args.sequence ??
-      getLatestThreadSequence(deps.db, { threadId: args.threadId }) + 1,
-    type: "thread/identity",
-    scope: threadScope(),
-    data: {},
   });
 }
 

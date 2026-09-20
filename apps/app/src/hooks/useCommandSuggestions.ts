@@ -3,7 +3,6 @@ import { useEffect, useMemo } from "react";
 import type { PromptMentionCommandTrigger } from "@bb/domain";
 import { usePointerCoarse } from "@bb/shared-ui/hooks/use-pointer-coarse";
 import {
-  filterCommandSuggestions,
   toProviderCommandSuggestion,
   type ProviderCommandSuggestion,
 } from "@bb/client-core";
@@ -16,8 +15,7 @@ interface UseCommandSuggestionsArgs {
   projectId: string | undefined;
   providerId: string | undefined;
   commandScope: "new-thread" | "thread";
-  skillsTriggers: readonly PromptMentionCommandTrigger[];
-  activeTrigger: PromptMentionCommandTrigger | null;
+  skillsTrigger: PromptMentionCommandTrigger | null;
   promptActions?: readonly CommandSuggestionPromptAction[];
   environmentId: string | null;
   hostId?: string | null;
@@ -28,7 +26,7 @@ interface UseCommandSuggestionsArgs {
 const COMMAND_CATALOG_PREFETCH_STALE_TIME_MS = 30_000;
 
 interface UseCommandSuggestionsResult {
-  triggers: readonly PromptMentionCommandTrigger[];
+  trigger: PromptMentionCommandTrigger | null;
   suggestions: ProviderCommandSuggestion[];
   isLoading: boolean;
   isError: boolean;
@@ -46,6 +44,34 @@ interface CommandSuggestionPromptAction {
   };
 }
 
+export function commandSuggestionMatchesQuery(
+  suggestion: ProviderCommandSuggestion,
+  query: string,
+): boolean {
+  if (query.length === 0) {
+    return true;
+  }
+
+  return [
+    suggestion.name,
+    suggestion.description ?? "",
+    suggestion.argumentHint ?? "",
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
+}
+
+export function filterCommandSuggestions(
+  suggestions: readonly ProviderCommandSuggestion[],
+  query: string,
+): ProviderCommandSuggestion[] {
+  const normalizedQuery = query.toLowerCase();
+  return suggestions.filter((suggestion) =>
+    commandSuggestionMatchesQuery(suggestion, normalizedQuery),
+  );
+}
+
 export function promptActionCommandSuggestions({
   promptActions,
   query,
@@ -59,8 +85,8 @@ export function promptActionCommandSuggestions({
     return [];
   }
 
-  return filterCommandSuggestions(
-    (promptActions ?? []).flatMap((action): ProviderCommandSuggestion[] => {
+  return (promptActions ?? [])
+    .flatMap((action): ProviderCommandSuggestion[] => {
       if (!action.command || action.command.trigger !== trigger) {
         return [];
       }
@@ -74,9 +100,8 @@ export function promptActionCommandSuggestions({
           argumentHint: null,
         },
       ];
-    }),
-    query,
-  );
+    })
+    .filter((suggestion) => commandSuggestionMatchesQuery(suggestion, query));
 }
 
 function mergeCommandSuggestions(
@@ -101,12 +126,11 @@ function mergeCommandSuggestions(
 export function useCommandSuggestions(
   args: UseCommandSuggestionsArgs,
 ): UseCommandSuggestionsResult {
-  const trigger = args.activeTrigger;
+  const trigger = args.skillsTrigger;
   const isActive =
     args.projectId !== undefined &&
     args.providerId !== undefined &&
     trigger !== null &&
-    args.skillsTriggers.includes(trigger) &&
     args.query !== null;
 
   const trimmedQuery = args.query?.trim() ?? "";
@@ -138,7 +162,7 @@ export function useCommandSuggestions(
     isPointerCoarse &&
     args.projectId !== undefined &&
     args.providerId !== undefined &&
-    args.skillsTriggers.length > 0;
+    trigger !== null;
   const prefetchProjectId = args.projectId;
   const prefetchProviderId = args.providerId;
   const prefetchEnvironmentId = args.environmentId;
@@ -175,11 +199,10 @@ export function useCommandSuggestions(
         .map(toProviderCommandSuggestion)
         .filter(
           (suggestion) =>
-            (trigger !== "$" || suggestion.source === "skill") &&
-            (args.commandScope === "thread" ||
-              suggestion.source !== "command" ||
-              suggestion.origin !== "builtin" ||
-              suggestion.name !== "compact"),
+            args.commandScope === "thread" ||
+            suggestion.source !== "command" ||
+            suggestion.origin !== "builtin" ||
+            suggestion.name !== "compact",
         ),
       trimmedQuery,
     );
@@ -190,7 +213,6 @@ export function useCommandSuggestions(
   }, [
     commandsQuery.data?.commands,
     args.commandScope,
-    trigger,
     isActive,
     promptActionSuggestions,
     trimmedQuery,
@@ -204,7 +226,7 @@ export function useCommandSuggestions(
   const isError = isActive && commandsQuery.isError;
 
   return {
-    triggers: args.skillsTriggers,
+    trigger,
     suggestions,
     isLoading,
     isError,

@@ -21,7 +21,6 @@ import {
 import { LEGACY_CODEX_GOAL_EXTENSION_KIND } from "@bb/domain";
 import type {
   ClientTurnRequestId,
-  CompletedTurnDisplay,
   ProviderComposerCommand,
   Thread,
   ThreadEvent,
@@ -145,7 +144,6 @@ interface ResolveTurnSummaryDetailsSourceRangeArgs {
 }
 
 interface BuildThreadTimelineOptions {
-  completedTurnDisplay: CompletedTurnDisplay;
   eventBudget: number;
   responseByteBudget?: number;
   includeDiagnosticOperations: boolean;
@@ -160,7 +158,6 @@ interface BuildThreadTimelineOptions {
 
 interface BuildTimelineTurnSummaryDetailsOptions extends TimelineTurnSummarySelection {
   beforeCursor?: string;
-  completedTurnDisplay: CompletedTurnDisplay;
   includeDiagnosticOperations: boolean;
   providerDisplayName?: string;
 }
@@ -1293,7 +1290,6 @@ function buildThreadTimelineInternal(
       options.providerDisplayName ?? null,
       thread.title ?? thread.titleFallback ?? "",
       resolveThreadWorkspaceRoot(db, thread),
-      options.completedTurnDisplay,
     ]),
     options.maxSeq === 0 ? undefined : options.maxSeq,
   );
@@ -1398,7 +1394,6 @@ function buildThreadTimelineInternal(
   );
   profile.contextWindowEventRowCount = contextWindowUsageRows.length;
   const commonProjectionOptions = {
-    completedTurnDisplay: options.completedTurnDisplay,
     includeDiagnosticOperations,
     isLatestPage: options.page.kind === "latest",
     providerDisplayName: options.providerDisplayName,
@@ -1479,7 +1474,6 @@ function buildThreadTimelineInternal(
     maxSeq: snapshot.maxSeq,
     rows: options.summaryOnly ? [] : paginatedTimeline.rows,
     contextBoundarySeq,
-    completedTurnDisplay: options.completedTurnDisplay,
     activePromptMode:
       options.page.kind === "latest" ? timeline.activePromptMode : null,
     activeThinking:
@@ -1507,7 +1501,6 @@ function buildThreadTimelineInternal(
         paginatedTimeline.contentCursor,
       ),
       historySnapshot: timelineSnapshotKey(snapshot),
-      olderRowsSourceSeqEnd: paginatedTimeline.olderRowsSourceSeqEnd,
       contentPage: paginatedTimeline.contentPage,
     },
   };
@@ -1528,7 +1521,6 @@ export function buildThreadTimelineWithProfile(
 }
 
 interface BuildThreadConversationOutlineOptions {
-  completedTurnDisplay: CompletedTurnDisplay;
   maxSeq: number;
   providerDisplayName?: string;
 }
@@ -1602,7 +1594,6 @@ export function buildThreadConversationOutline(
       contextWindowEvents: [],
       events: decodedEvents,
       options: {
-        completedTurnDisplay: options.completedTurnDisplay,
         includeNestedRows: false,
         includeDiagnosticOperations: false,
         isLatestPage: true,
@@ -1635,17 +1626,16 @@ export function buildThreadConversationOutline(
 export function buildThreadConversationOutlineProjectionKey(
   thread: Thread,
   outlineSequence: number,
-  options: BuildThreadConversationOutlineOptions,
+  providerDisplayName: string | undefined,
 ): string {
   return JSON.stringify([
     CONVERSATION_OUTLINE_PROJECTION_VERSION,
     outlineSequence,
     thread.providerId,
-    options.providerDisplayName ?? null,
+    providerDisplayName ?? null,
     thread.status,
     thread.title,
     thread.titleFallback,
-    options.completedTurnDisplay,
   ]);
 }
 
@@ -1674,7 +1664,7 @@ export function loadThreadConversationOutline(
   const projectionKey = buildThreadConversationOutlineProjectionKey(
     thread,
     options.outlineSequence,
-    options,
+    options.providerDisplayName,
   );
   const stored = getThreadConversationOutlineRecord(db, thread.id);
   if (stored?.projectionKey === projectionKey) {
@@ -1742,7 +1732,6 @@ function buildTimelineTurnSummaryDetailsPage(
       options.providerDisplayName ?? null,
       thread.title ?? thread.titleFallback ?? "",
       resolveThreadWorkspaceRoot(db, thread),
-      options.completedTurnDisplay,
     ]),
   );
   const contentCursor = readTimelineContentCursor(detailsPage);
@@ -1890,7 +1879,6 @@ function buildTimelineTurnSummaryDetailsPage(
   const children = buildThreadTimelineTurnDetailsFromEvents({
     events: projectionEvents,
     options: {
-      completedTurnDisplay: options.completedTurnDisplay,
       includeDiagnosticOperations,
       sourceSeqEnd: sourceRange.sourceSeqEnd,
       sourceSeqStart: projectionSourceSeqStart,

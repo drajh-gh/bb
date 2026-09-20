@@ -1,1 +1,0 @@
-ALTER TABLE `threads` ADD `storage_deleted_at` integer;

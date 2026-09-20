@@ -1,6 +1,5 @@
 import type {
   MachineEnvironmentReplace,
-  MachineEnvironmentSet,
   MachineEnvironmentList,
 } from "@bb/server-contract";
 import type {
@@ -114,12 +113,6 @@ export interface SystemUiPreferencesArea {
 }
 
 export interface SystemArea {
-  setMachineEnvironmentVariable(
-    input: MachineEnvironmentSet,
-  ): Promise<MachineEnvironmentList>;
-  deleteMachineEnvironmentVariable(input: {
-    name: string;
-  }): Promise<MachineEnvironmentList>;
   machineEnvironment(): Promise<MachineEnvironmentList>;
   replaceMachineEnvironment(
     input: MachineEnvironmentReplace,
@@ -194,18 +187,6 @@ export function createSystemArea(args: CreateSdkAreaArgs): SystemArea {
   };
   return {
     uiPreferences,
-    async setMachineEnvironmentVariable(input) {
-      return transport.readJson(
-        transport.api.v1.settings["machine-environment"].$post({ json: input }),
-      );
-    },
-    async deleteMachineEnvironmentVariable(input) {
-      return transport.readJson(
-        transport.api.v1.settings["machine-environment"].$delete({
-          json: input,
-        }),
-      );
-    },
     async machineEnvironment() {
       return transport.readJson(
         transport.api.v1.settings["machine-environment"].$get(),

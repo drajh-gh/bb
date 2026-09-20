@@ -1,5 +1,3 @@
-import type { RefCallback } from "react";
-
 const SIDEBAR_THREAD_ROW_DROPPABLE_PREFIX = "sidebar:thread-row:";
 
 export type SidebarNestTargetState = "valid" | "blocked" | "unchanged";
@@ -7,7 +5,7 @@ export type SidebarNestTargetState = "valid" | "blocked" | "unchanged";
 export type SidebarReorderPlacement = "before" | "after";
 
 export interface ThreadRowNestDrop {
-  setNodeRef: RefCallback<HTMLDivElement>;
+  setNodeRef: (element: HTMLElement | null) => void;
   state: SidebarNestTargetState | null;
   reorderPlacement: SidebarReorderPlacement | null;
 }

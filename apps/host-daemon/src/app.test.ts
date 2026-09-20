@@ -51,7 +51,6 @@ interface FetchRecorder {
 
 interface CreateFetchRecorderArgs {
   machineEnvironment?: HostDaemonContributedEnvEntry[];
-  onToolCallSignal?: (signal: AbortSignal | null | undefined) => void;
   inactiveSessionOnFirstEventPost?: boolean;
   interactiveRequestError?: Error;
   interactiveRequestResponse?: HostDaemonInteractiveRequestResponse;
@@ -128,8 +127,6 @@ function createFetchRecorder(
     };
     requests.push(request);
 
-    if (url.pathname === "/internal/session/tool-call")
-      args.onToolCallSignal?.(init?.signal);
     if (url.pathname === "/internal/session/open") {
       const sessionId =
         args.sessionIds?.[sessionOpenCount] ??
@@ -1089,33 +1086,6 @@ describe("createHostDaemonApp", () => {
         threadIds: [request.threadId],
         reason: 'Provider "codex" exited while awaiting user interaction',
       });
-    } finally {
-      await app.daemon.shutdown("test", 0);
-    }
-  });
-
-  it("forwards the runtime cancellation signal through the daemon tool callback", async () => {
-    let signal: AbortSignal | null | undefined;
-    const { app, runtimeOptions } = await createAppFixture({
-      onToolCallSignal: (value) => {
-        signal = value;
-      },
-    });
-    try {
-      const workspacePath = await makeTempDir("bb-host-daemon-app-abort-");
-      await app.runtimeManager.ensureEnvironment({
-        environmentId: "env-abort",
-        workspacePath,
-      });
-      await app.connection.start();
-      const controller = new AbortController();
-      const callback = runtimeOptions.current?.onToolCall;
-      if (!callback) throw new Error("Tool callback missing");
-      await expect(
-        callback(createToolCallRequest(), controller.signal),
-      ).rejects.toThrow("Failed to call tool");
-      controller.abort();
-      expect(signal?.aborted).toBe(true);
     } finally {
       await app.daemon.shutdown("test", 0);
     }

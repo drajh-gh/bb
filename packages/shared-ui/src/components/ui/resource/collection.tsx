@@ -212,14 +212,12 @@ export function ResourceBrowseGrid({
 export function ResourceSourceShelf({
   label,
   description,
-  hideDescriptionOnMobile = false,
   leading,
   browseAction,
   children,
 }: {
   label: ReactNode;
   description?: ReactNode;
-  hideDescriptionOnMobile?: boolean;
   leading?: ReactNode;
   browseAction?: ReactNode;
   children: ReactNode;
@@ -233,22 +231,22 @@ export function ResourceSourceShelf({
             {label}
           </ResourceSectionTitle>
         </div>
-        {browseAction ? (
+        {browseAction && description === undefined ? (
           <div className="ml-auto shrink-0 text-xs text-muted-foreground">
             {browseAction}
           </div>
         ) : null}
       </div>
       {description === undefined ? null : (
-        <div
-          className={cn(
-            "min-w-0 items-center gap-3 px-[var(--resource-source-shelf-inset)]",
-            hideDescriptionOnMobile ? "hidden sm:flex" : "flex",
-          )}
-        >
+        <div className="flex min-w-0 items-center gap-3 px-[var(--resource-source-shelf-inset)]">
           <p className="min-w-0 max-w-2xl text-xs leading-relaxed text-muted-foreground">
             {description}
           </p>
+          {browseAction ? (
+            <div className="ml-auto shrink-0 text-xs text-muted-foreground">
+              {browseAction}
+            </div>
+          ) : null}
         </div>
       )}
       <div className="px-[var(--resource-source-shelf-inset)]">{children}</div>

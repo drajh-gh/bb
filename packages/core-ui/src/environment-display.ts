@@ -32,6 +32,7 @@ export interface EnvironmentDisplayNameSource {
 export interface EnvironmentDisplayInfo {
   modeLabel: string;
   compactModeLabel: string;
+  typeLabel: string;
   providerLabel: string | null;
   lifecycle: "provisioning" | "destroyed" | null;
   id: string;
@@ -61,7 +62,7 @@ export function resolveEnvironmentProviderLabel(
     : lookup.provider.displayName;
 }
 
-function resolveWorkspaceFolderName(
+export function resolveWorkspaceFolderName(
   workspacePath: string | null,
 ): string | null {
   if (workspacePath === null) return null;
@@ -76,9 +77,8 @@ export function resolveEnvironmentDisplayName(
   return (
     source.name ??
     source.branchName ??
-    (source.environmentProviderId === null
-      ? resolveWorkspaceFolderName(source.path)
-      : resolveEnvironmentProviderLabel(source.environmentProviderId, lookup))
+    resolveWorkspaceFolderName(source.path) ??
+    resolveEnvironmentProviderLabel(source.environmentProviderId, lookup)
   );
 }
 
@@ -112,6 +112,10 @@ export function formatEnvironmentDisplay({
   return {
     modeLabel: environment.name ?? lifecycleLabel ?? namedLabel,
     compactModeLabel: environment.name ?? lifecycleLabel ?? namedCompactLabel,
+    typeLabel:
+      providerLabel === null
+        ? localityLabel
+        : `${providerLabel} · ${localityLabel}`,
     providerLabel,
     lifecycle,
     id: environment.id,

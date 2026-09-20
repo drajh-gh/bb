@@ -107,7 +107,6 @@ describe("fetchThreadPendingTodos", () => {
     return {
       activePromptMode: null,
       contextBoundarySeq: null,
-      completedTurnDisplay: "collapse",
       activeThinking: null,
       activeWorkflows: [],
       activeBackgroundCommands: [],

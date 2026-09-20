@@ -11,7 +11,7 @@ import {
   deleteThreadEventSuffixInTransaction,
   getLatestThreadSequence,
   noopNotifier,
-  pruneContextWindowUsageEvents,
+  pruneContextWindowUsageEventsBeforeSequence,
   pruneResolvedItemDeltas,
 } from "@bb/db";
 import { pruneThreadEventHistory } from "../../../src/services/system/event-pruning.js";
@@ -675,7 +675,8 @@ describe("latest timeline selection memo", () => {
               { db: testThread.db },
               { mode: "active", threadId: testThread.thread.id },
             );
-            pruneContextWindowUsageEvents(testThread.db, {
+            pruneContextWindowUsageEventsBeforeSequence(testThread.db, {
+              sequenceCutoff: latest,
               threadId: testThread.thread.id,
             });
           } else {

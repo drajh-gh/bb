@@ -133,7 +133,7 @@ beforeEach(() => {
     },
   });
   vi.mocked(sdk.threads.archiveAll).mockResolvedValue({
-    archivedThreadIds: ["thr_child", "thr_parent"],
+    archivedThreadIds: ["thr_parent", "thr_child"],
     ok: true,
   });
   vi.mocked(sdk.threads.unarchive).mockResolvedValue({ ok: true });

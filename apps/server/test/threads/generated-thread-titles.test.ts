@@ -22,7 +22,6 @@ import {
   seedHostSession,
   seedProjectWithSource,
   seedThread,
-  seedThreadIdentity,
   seedTurnStarted,
 } from "../helpers/seed.js";
 import {
@@ -435,10 +434,6 @@ describe("generated thread titles", () => {
       const sourceThread = seedThread(harness.deps, {
         projectId: project.id,
         environmentId: environment.id,
-      });
-      seedThreadIdentity(harness.deps, {
-        threadId: sourceThread.id,
-        providerThreadId: "provider-generated-fork-title-source",
       });
       seedTurnStarted(harness.deps, {
         threadId: sourceThread.id,

@@ -3,13 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { atom, useAtom, useAtomValue, useStore } from "jotai";
 import { atomWithStorage } from "jotai/utils";
-import {
-  Link,
-  matchPath,
-  Navigate,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
 import type { ProjectResponse } from "@bb/server-contract";
 import { Icon } from "@bb/shared-ui/icon";
 import { TooltipProvider } from "@bb/shared-ui/tooltip";
@@ -18,7 +12,6 @@ import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-  useSidebar,
 } from "@/components/ui/sidebar.js";
 import {
   ThreadTitleMentionResourcesProvider,
@@ -49,10 +42,6 @@ import { useRouteState } from "@/hooks/useRouteState";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
 import { cn } from "@bb/shared-ui/lib/utils";
 import { APP_OVERLAY_LAYER } from "@/components/ui/app-overlay-layers";
-import {
-  COMPACT_SHELF_HIDDEN_FIXED_CHROME_CLASS,
-  usePanelShelfState,
-} from "@/components/ui/secondary-panel-shelf-visibility";
 import { ProjectPathDialog } from "@/components/dialogs/ProjectPathDialog";
 import { ProjectActionsMenu } from "@/components/project/ProjectActionsMenu";
 import { ProjectActionsProvider } from "@/components/project/ProjectActionsProvider";
@@ -204,11 +193,6 @@ function SidebarTriggerOverlay({
   usesDesktopChrome,
 }: SidebarTriggerOverlayProps) {
   const isCompactViewport = useIsCompactViewport();
-  const { openMobile } = useSidebar();
-  const panelShelfState = usePanelShelfState({
-    isCompactViewport,
-    isSidebarDrawerOpen: openMobile,
-  });
   const shortcut = useAppCommandShortcut("sidebar.toggle");
   const triggerProps = {
     "aria-label": shortcut
@@ -220,11 +204,9 @@ function SidebarTriggerOverlay({
     return (
       <div
         data-testid="app-desktop-sidebar-trigger"
-        data-panel-shelf={panelShelfState}
         style={{ zIndex: APP_OVERLAY_LAYER.sidebarTrigger }}
         className={cn(
           "fixed top-0",
-          COMPACT_SHELF_HIDDEN_FIXED_CHROME_CLASS,
           CHROME_ROW_CLASS,
           reserveMacosTrafficLights
             ? MACOS_TRAFFIC_LIGHT_RESERVE_OFFSET_CLASS
@@ -250,7 +232,6 @@ function SidebarTriggerOverlay({
   return (
     <div
       data-testid="app-sidebar-trigger-overlay"
-      data-panel-shelf={panelShelfState}
       style={{
         zIndex: isCompactViewport
           ? APP_OVERLAY_LAYER.compactSidebarTrigger
@@ -258,7 +239,6 @@ function SidebarTriggerOverlay({
       }}
       className={cn(
         "fixed top-[env(safe-area-inset-top)] left-[env(safe-area-inset-left)]",
-        COMPACT_SHELF_HIDDEN_FIXED_CHROME_CLASS,
         CHROME_ROW_CLASS,
         BROWSER_SIDEBAR_TRIGGER_INSET_CLASS,
       )}
@@ -512,18 +492,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   });
   const hasThreadDetailBootstrapSettled =
     threadDetailBootstrapQuery.isSuccess || threadDetailBootstrapQuery.isError;
-  const resolvedThreadProjectId = threadDetailBootstrapQuery.data?.projectId;
-  const canonicalThreadRoutePath =
-    isThreadView &&
-    projectId !== undefined &&
-    threadId !== undefined &&
-    resolvedThreadProjectId !== undefined &&
-    resolvedThreadProjectId !== projectId
-      ? getThreadRoutePath({
-          projectId: resolvedThreadProjectId,
-          threadId,
-        })
-      : null;
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
@@ -732,19 +700,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (typeof document === "undefined") return;
     document.title = documentTitle;
   }, [documentTitle]);
-
-  if (canonicalThreadRoutePath !== null) {
-    return (
-      <Navigate
-        to={{
-          pathname: canonicalThreadRoutePath,
-          search: location.search,
-          hash: location.hash,
-        }}
-        replace
-      />
-    );
-  }
 
   return (
     <TooltipProvider delayDuration={300} disableHoverableContent>

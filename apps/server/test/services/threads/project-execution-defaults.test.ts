@@ -9,7 +9,6 @@ import {
   seedHostSession,
   seedProjectWithSource,
   seedThread,
-  seedThreadIdentity,
   seedTurnStarted,
 } from "../../helpers/seed.js";
 import { textInput } from "../../helpers/prompt-input.js";
@@ -133,10 +132,6 @@ describe("project execution defaults persistence", () => {
       const parentThread = seedThread(harness.deps, {
         projectId: project.id,
         environmentId: parentEnvironment.id,
-      });
-      seedThreadIdentity(harness.deps, {
-        threadId: parentThread.id,
-        providerThreadId: "provider-origin-kind-defaults-source",
       });
       seedTurnStarted(harness.deps, {
         threadId: parentThread.id,

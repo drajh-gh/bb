@@ -13,10 +13,6 @@ import {
 } from "@bb/domain/plugin-interaction-limits";
 import { PROVIDER_FORK_VALUES } from "@bb/domain/provider-fork";
 import {
-  COMPLETED_TURN_DISPLAY_VALUES,
-  DEFAULT_COMPLETED_TURN_DISPLAY,
-} from "@bb/domain/completed-turn-display";
-import {
   jsonValueSchema,
   normalizeProviderNativeRoots,
   providerNativeRootsInputSchema,
@@ -45,7 +41,6 @@ import type {
   ServerAccessProviderDeclaration,
   PluginProviderCapabilities,
   PluginProviderComposerAction,
-  PluginProviderCompletedTurnDisplay,
   PluginProviderDeclaration,
   ExperimentalPluginProviderEnvEntry,
   PluginProviderExtensionKindDeclaration,
@@ -963,27 +958,6 @@ function validateProviderModelCatalogScope(
   return value as PluginProviderModelCatalogScope;
 }
 
-const PROVIDER_COMPLETED_TURN_DISPLAYS =
-  COMPLETED_TURN_DISPLAY_VALUES satisfies readonly PluginProviderCompletedTurnDisplay[];
-
-function validateProviderCompletedTurnDisplay(
-  providerId: string,
-  value: unknown,
-): PluginProviderCompletedTurnDisplay {
-  if (value === undefined) {
-    return DEFAULT_COMPLETED_TURN_DISPLAY;
-  }
-  if (
-    typeof value !== "string" ||
-    !(PROVIDER_COMPLETED_TURN_DISPLAYS as readonly string[]).includes(value)
-  ) {
-    throw new Error(
-      `provider "${providerId}" completedTurnDisplay must be one of ${PROVIDER_COMPLETED_TURN_DISPLAYS.join(", ")}`,
-    );
-  }
-  return value as PluginProviderCompletedTurnDisplay;
-}
-
 /**
  * Returns undefined when the declaration carries `models` for a
  * reason other than a fallback list — `scope` alone is a valid declaration.
@@ -1309,7 +1283,6 @@ export type NormalizedPluginProviderDeclaration = Omit<
   readonly experimental_nativeSkillRoots?: ProviderNativeRoots;
   readonly experimental_nativeCommandRoots?: ProviderNativeRoots;
   readonly experimental_resolvesNativeRoots: boolean;
-  readonly completedTurnDisplay: PluginProviderCompletedTurnDisplay;
   readonly maintenance: {
     readonly health: boolean;
     readonly usage: boolean;
@@ -1550,10 +1523,6 @@ export function validatePluginProviderDeclaration(
     allowed: PLUGIN_PROVIDER_COMPOSER_ACTION_VALUES,
     requireNonEmpty: false,
   });
-  const completedTurnDisplay = validateProviderCompletedTurnDisplay(
-    id,
-    declaration.completedTurnDisplay,
-  );
   const bridgeOptions =
     declaration.experimental_bridgeOptions === undefined
       ? undefined
@@ -1658,7 +1627,6 @@ export function validatePluginProviderDeclaration(
     maintenance: normalizedMaintenance,
     capabilities: normalizedCapabilities,
     composerActions,
-    completedTurnDisplay,
     ...(strings === undefined ? {} : { strings: strings }),
     ...(serviceTiers === undefined ? {} : { serviceTiers: serviceTiers }),
     ...(reasoningLevels === undefined

@@ -50,7 +50,6 @@ export {
   ResourceCollectionPage,
   ResourceCollectionViewport,
   ResourceShelfSeeAllAction,
-  ResourceShelfAction,
   ResourceSourceShelf,
   ResourceTemplateBrowseCard,
 } from "./resource/collection";

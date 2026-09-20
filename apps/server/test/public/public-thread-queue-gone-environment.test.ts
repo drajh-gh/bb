@@ -20,7 +20,6 @@ import {
   seedProjectWithSource,
   seedQueuedMessage,
   seedThread,
-  seedThreadIdentity,
   seedTurnStarted,
 } from "../helpers/seed.js";
 import { withTestHarness, type TestAppHarness } from "../helpers/test-app.js";
@@ -70,7 +69,7 @@ describe("queued message into a thread whose environment is gone (#1789)", () =>
         });
         const environment = seedEnvironment(harness.deps, {
           hostId: host.id,
-          projectId: project.id,
+              projectId: project.id,
           path: null,
           status,
           isGitRepo: false,
@@ -146,11 +145,6 @@ describe("queued message into a thread whose environment is gone (#1789)", () =>
         scope: threadScope(),
         data: earlierTurnEventData,
       });
-      seedThreadIdentity(harness.deps, {
-        threadId: thread.id,
-        environmentId: null,
-        providerThreadId: "provider-turn-1",
-      });
       seedTurnStarted(harness.deps, {
         threadId: thread.id,
         environmentId: null,
@@ -204,7 +198,7 @@ describe("queued message into a thread whose environment is gone (#1789)", () =>
       });
       const environment = seedEnvironment(harness.deps, {
         hostId: host.id,
-        projectId: project.id,
+          projectId: project.id,
         status: "ready",
         isGitRepo: false,
       });

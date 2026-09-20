@@ -7,7 +7,6 @@ import {
 import type {
   ApprovalPendingInteractionResolution,
   ClientTurnRequestId,
-  CompletedTurnDisplay,
   PromptInput,
   ProviderRawEvent,
   ProvisioningTranscriptEntry,
@@ -39,7 +38,6 @@ import { buildEventProjection } from "../src/build-event-projection.js";
 import type { ThreadEventWithMeta } from "../src/build-event-projection.js";
 
 export interface RenderTimelineFixtureArgs {
-  completedTurnDisplay?: CompletedTurnDisplay;
   events: ThreadEventRow[];
   includeNestedRows?: boolean;
   projectionOptions: Omit<BuildEventProjectionOptions, "threadName"> & {
@@ -1479,7 +1477,6 @@ export function renderTimelineFixture(
       : args.projectionOptions.turnMessageDetail,
   });
   const commonProjectionOptions = {
-    completedTurnDisplay: args.completedTurnDisplay ?? "collapse",
     includeDiagnosticOperations:
       args.projectionOptions.includeDiagnosticOperations ?? false,
     isLatestPage: true,

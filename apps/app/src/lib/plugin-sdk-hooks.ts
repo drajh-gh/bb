@@ -1,8 +1,4 @@
 import {
-  removePluginMention,
-  subscribeComposerSubmitted,
-} from "./composer-submissions";
-import {
   useCallback,
   useContext,
   useEffect,
@@ -803,44 +799,6 @@ export function useComposer(): PluginComposerApi {
     [focusActiveComposer, getCurrent, pluginId, setDraft],
   );
 
-  const experimental_removeMention = useCallback(
-    (mention: { provider: string; id: string }) => {
-      const current = getCurrent();
-      const next = removePluginMention(
-        current,
-        pluginId,
-        mention.provider,
-        mention.id,
-      );
-      if (next !== current) setDraft(next);
-    },
-    [getCurrent, pluginId, setDraft],
-  );
-  const submissionSubscriptions = useRef(new Set<() => void>());
-  useEffect(
-    () => () => {
-      for (const unsubscribe of submissionSubscriptions.current) unsubscribe();
-      submissionSubscriptions.current.clear();
-    },
-    [composerScope, threadId, projectId],
-  );
-  const experimental_onSubmitted = useCallback(
-    (listener: () => void) => {
-      const scope =
-        composerScope ??
-        (threadId !== undefined
-          ? { kind: "thread" as const, threadId }
-          : { kind: "new-thread" as const, projectId: projectId ?? null });
-      const unsubscribe = subscribeComposerSubmitted(scope, listener);
-      submissionSubscriptions.current.add(unsubscribe);
-      return () => {
-        unsubscribe();
-        submissionSubscriptions.current.delete(unsubscribe);
-      };
-    },
-    [composerScope, threadId, projectId],
-  );
-
   const focus = focusActiveComposer;
   const composerText = composerHostDraft?.text ?? routeDraft.text;
 
@@ -851,22 +809,14 @@ export function useComposer(): PluginComposerApi {
         throw new Error("This composer is no longer active.");
       }
       if (hostSubmit === undefined) {
-        throw new Error("This composer cannot submit programmatically.");
+        throw new Error("This composer cannot schedule a submission.");
       }
-      if (
-        options.sendAt !== undefined &&
-        (!Number.isFinite(options.sendAt) || options.sendAt <= Date.now())
-      ) {
+      if (!Number.isFinite(options.sendAt) || options.sendAt <= Date.now()) {
         throw new Error("Pick a time in the future.");
       }
-      await hostSubmit(
-        options,
-        options.experimental_data === undefined
-          ? undefined
-          : { pluginId, data: options.experimental_data },
-      );
+      await hostSubmit({ sendAt: options.sendAt });
     },
-    [hostSubmit, pluginId, scopeOwnership],
+    [hostSubmit, scopeOwnership],
   );
 
   return useMemo(
@@ -885,8 +835,6 @@ export function useComposer(): PluginComposerApi {
       setThreadRowStatus: legacySetThreadRowStatus,
       addQuote,
       insertMention,
-      experimental_removeMention,
-      experimental_onSubmitted,
       focus,
       experimental_submit,
     }),
@@ -898,8 +846,6 @@ export function useComposer(): PluginComposerApi {
       experimental_submit,
       focus,
       insertMention,
-      experimental_removeMention,
-      experimental_onSubmitted,
       projectId,
       setText,
       setTextEffect,

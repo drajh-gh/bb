@@ -90,7 +90,6 @@ describe.skipIf(!corpusAvailable())(
               rejectedClientRequestEvents: [],
             },
             options: {
-              completedTurnDisplay: "collapse",
               includeDiagnosticOperations: false,
               includeNestedRows: false,
               isLatestPage: true,
@@ -167,7 +166,6 @@ describe.skipIf(!corpusAvailable())(
           const actualIds = new Set(rows.map((row) => row.id));
           clearTimelineOrderingContextCache(db);
           const { profile } = buildThreadTimelineWithProfile(db, thread, {
-            completedTurnDisplay: "collapse",
             eventBudget: 1_500,
             includeDiagnosticOperations: false,
             maxInlineOutputChars: 32_000,

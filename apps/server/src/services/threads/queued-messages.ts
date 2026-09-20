@@ -1,12 +1,11 @@
 import {
-  claimNextQueuedThreadMessageGroup,
   claimQueuedThreadMessageGroup,
+  claimNextQueuedThreadMessageGroup,
   createQueuedThreadMessageInTransaction,
   deleteClaimedQueuedThreadMessageBatchInTransaction,
+  getQueuedThreadMessage,
   getEnvironment,
   getHost,
-  getQueuedThreadMessage,
-  getStoredProviderSession,
   getThread,
   isOrdinaryTurnEndQueuedMessage,
   isThreadQueueAutoSendPaused,
@@ -189,17 +188,16 @@ export interface CreateQueuedMessageForThreadArgs {
 function admitQueuedMessage(
   db: DbQueryConnection,
   thread: Thread,
-): { hasProviderSession: boolean } {
+): { providerThreadId: string | null } {
   ensureThreadQueueIsWritable(thread);
-  const hasProviderSession =
-    getStoredProviderSession(db, thread.id).kind !== "none";
+  const providerThreadId = getLastProviderThreadId({ db }, thread.id);
   if (thread.environmentId === null) {
-    if (hasProviderSession) {
+    if (providerThreadId !== null) {
       throwThreadEnvironmentUnavailable(
         threadEnvironmentUnavailableDetails("never_attached", null),
       );
     }
-    return { hasProviderSession };
+    return { providerThreadId };
   }
   const environment = getEnvironment(db, thread.environmentId);
   const goneDetails = environment
@@ -208,7 +206,7 @@ function admitQueuedMessage(
   if (goneDetails) {
     throwThreadEnvironmentUnavailable(goneDetails);
   }
-  return { hasProviderSession };
+  return { providerThreadId };
 }
 
 export async function createQueuedMessageForThread(
@@ -218,7 +216,6 @@ export async function createQueuedMessageForThread(
   const { payload, thread } = args;
   ensureThreadQueueIsWritable(thread);
   await validatePromptAttachmentReferences({
-    db: deps.db,
     dataDir: deps.config.dataDir,
     input: payload.input,
     projectId: thread.projectId,
@@ -230,14 +227,14 @@ export async function createQueuedMessageForThread(
     senderThreadId: payload.senderThreadId,
     targetThread: thread,
   });
-  const { currentThread, hasProviderSession, queuedMessage } =
+  const { currentThread, providerThreadId, queuedMessage } =
     deps.db.transaction(
       (tx) => {
         const currentThread = getThread(tx, thread.id);
         if (!currentThread) {
           throw new ApiError(404, "thread_not_found", "Thread not found");
         }
-        const { hasProviderSession } = admitQueuedMessage(tx, currentThread);
+        const { providerThreadId } = admitQueuedMessage(tx, currentThread);
         const queuedMessage = createQueuedThreadMessageInTransaction(tx, {
           threadId: thread.id,
           content: payload.input,
@@ -263,7 +260,7 @@ export async function createQueuedMessageForThread(
           payload: { kind: "inline" },
           systemNotice: null,
         });
-        return { currentThread, hasProviderSession, queuedMessage };
+        return { currentThread, providerThreadId, queuedMessage };
       },
       { behavior: "immediate" },
     );
@@ -275,7 +272,7 @@ export async function createQueuedMessageForThread(
       providerId: thread.providerId,
     });
   }
-  if (currentThread.status === "idle" && hasProviderSession) {
+  if (currentThread.status === "idle" && providerThreadId !== null) {
     requestQueuedMessageDispatch(deps, {
       kind: "thread-ready",
       threadId: thread.id,
@@ -705,7 +702,6 @@ async function sendClaimedQueuedMessageForThread(
       sendNow: args.sendNow,
     },
     queuePayload: queuedMessage.payload,
-    pluginSubmission: null,
     ...(queuedMessage.payload.kind === "retry"
       ? {
           retryOf: {

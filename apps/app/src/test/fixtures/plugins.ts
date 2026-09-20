@@ -68,7 +68,6 @@ export function makePluginListItem(
     provenance: "direct",
     isOrphanedBuiltin: false,
     catalogEntryId: null,
-    catalogMarketplaceName: null,
     publisherLabel: null,
     sourceDisplay: "path · /plugins/plugin-test",
     updateState: {

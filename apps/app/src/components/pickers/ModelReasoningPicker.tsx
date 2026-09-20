@@ -105,9 +105,6 @@ export interface ModelReasoningPickerHandoffSelection {
 
 export interface ModelReasoningPickerHandoff {
   sourceProviderId: string;
-  active: boolean;
-  onStart: () => void;
-  onExit: () => void;
   onSelect: (selection: ModelReasoningPickerHandoffSelection) => void;
 }
 
@@ -269,9 +266,7 @@ export function ModelReasoningPicker({
   const [moreModelsOpen, setMoreModelsOpen] = useState(false);
   const [trackedSelectedProviderId, setTrackedSelectedProviderId] =
     useState(selectedProviderId);
-  const [browsingHandoff, setHandoffMode] = useState(false);
-  const handoffMode =
-    handoff !== undefined && (handoff.active || browsingHandoff);
+  const [handoffMode, setHandoffMode] = useState(false);
   const [handoffReasoningLevel, setHandoffReasoningLevel] =
     useState<ReasoningLevel | null>(null);
 
@@ -612,9 +607,17 @@ export function ModelReasoningPicker({
     ],
   );
 
+  const handoffProviderOptions = useMemo(
+    () =>
+      handoff === undefined
+        ? providerOptions
+        : providerOptions.filter(
+            (provider) => provider.value !== handoff.sourceProviderId,
+          ),
+    [handoff, providerOptions],
+  );
   const handleHandoffProviderSelect = useCallback(
     (providerId: string) => {
-      handoff?.onStart();
       setHandoffMode(true);
       setPreviewProviderId(
         providerId === selectedProviderId ? null : providerId,
@@ -625,14 +628,14 @@ export function ModelReasoningPicker({
       setSearchQuery("");
       setActiveIndex(-1);
     },
-    [handoff, selectedProviderId],
+    [selectedProviderId],
   );
   const handleProviderSelect = useCallback(
     (providerId: string) => {
       if (
         open &&
         handoff !== undefined &&
-        (handoffMode || providerId !== handoff.sourceProviderId)
+        providerId !== handoff.sourceProviderId
       ) {
         handleHandoffProviderSelect(providerId);
         return;
@@ -646,7 +649,6 @@ export function ModelReasoningPicker({
     },
     [
       handoff,
-      handoffMode,
       handleHandoffProviderSelect,
       onSelectedProviderChange,
       open,
@@ -654,15 +656,25 @@ export function ModelReasoningPicker({
     ],
   );
   const startHandoffMode = useCallback(() => {
-    handleHandoffProviderSelect(selectedProviderId);
-  }, [handleHandoffProviderSelect, selectedProviderId]);
+    const firstProvider = handoffProviderOptions[0];
+    handleHandoffProviderSelect(firstProvider?.value ?? selectedProviderId);
+  }, [handleHandoffProviderSelect, handoffProviderOptions, selectedProviderId]);
   const exitHandoffMode = useCallback(() => {
     setHandoffMode(false);
     setHandoffReasoningLevel(null);
     setPreviewProviderId(null);
     setSearchQuery("");
-    handoff?.onExit();
-  }, [handoff]);
+    setActiveIndex(-1);
+  }, []);
+  const returnToSourceProvider = useCallback(() => {
+    if (handoff === undefined) {
+      return;
+    }
+    exitHandoffMode();
+    if (selectedProviderId !== handoff.sourceProviderId) {
+      onSelectedProviderChange?.(handoff.sourceProviderId);
+    }
+  }, [exitHandoffMode, handoff, onSelectedProviderChange, selectedProviderId]);
 
   const handleReasoningSelect = useCallback(
     (level: ReasoningLevel) => {
@@ -780,8 +792,8 @@ export function ModelReasoningPicker({
       if (handoffMode) {
         const next =
           index === 0
-            ? nextCycleValue(providerOptions, activeProviderId)
-            : previousCycleValue(providerOptions, activeProviderId);
+            ? nextCycleValue(handoffProviderOptions, activeProviderId)
+            : previousCycleValue(handoffProviderOptions, activeProviderId);
         if (next !== null) {
           handleHandoffProviderSelect(next);
         }
@@ -1054,7 +1066,9 @@ export function ModelReasoningPicker({
         <ResetBrowseStateOnContentUnmount onReset={resetBrowseState} />
         {handoffMode ? <HandoffModeHeader onBack={exitHandoffMode} /> : null}
         {showProviderTabs ? (
-          <div className="flex shrink-0 items-center gap-0.5 border-b border-border bg-background px-2.5 pt-1">
+          <div
+            className="flex shrink-0 items-center gap-0.5 border-b border-border bg-background px-2.5 pt-1"
+          >
             {providerOptions.map((provider) => {
               const TabIcon = provider.icon;
               const isActive = provider.value === activeProviderId;
@@ -1073,6 +1087,10 @@ export function ModelReasoningPicker({
                   }
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
+                    if (isHandoffSource) {
+                      returnToSourceProvider();
+                      return;
+                    }
                     if (provider.value === activeProviderId) {
                       return;
                     }
@@ -1289,7 +1307,7 @@ export function ModelReasoningPicker({
 
             {handoff !== undefined &&
             !handoffMode &&
-            providerOptions.length > 0 ? (
+            handoffProviderOptions.length > 0 ? (
               <>
                 <div className="shrink-0 border-t border-border" />
                 <div className="shrink-0 p-1">
@@ -1313,14 +1331,14 @@ function HandoffModeHeader({ onBack }: { onBack: () => void }) {
     <div className="flex shrink-0 items-center gap-1 bg-background px-2 pb-1 pt-1.5">
       <button
         type="button"
-        aria-label="Exit handoff"
+        aria-label="Back to model picker"
         onClick={onBack}
         className={cn(
           "flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-state-hover hover:text-foreground",
           LIST_HOVER_TRANSITION,
         )}
       >
-        <Icon name="X" className="size-3.5" aria-hidden />
+        <Icon name="ChevronLeft" className="size-3.5" aria-hidden />
       </button>
       <span className="min-w-0 truncate text-xs font-normal text-subtle-foreground">
         Handoff to new thread

@@ -1,4 +1,3 @@
-import { RuntimeToolCalls } from "./runtime-provider-requests.js";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -105,7 +104,6 @@ async function answerDirectRequest(args: {
   }
   try {
     handleRuntimeProviderRequest({
-      toolCalls: new RuntimeToolCalls(),
       getActiveTurnId: args.getActiveTurnId ?? (() => "bb-turn-1"),
       getThreadExecutionOptions:
         args.getThreadExecutionOptions ?? (() => undefined),

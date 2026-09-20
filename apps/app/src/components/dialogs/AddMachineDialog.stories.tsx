@@ -118,7 +118,6 @@ export function EnrollmentCommandState() {
             onRetry={noop}
             onRegenerate={noop}
             connectedHost={null}
-            serverMachineName="Mac mini"
             onOpenMachine={noop}
           />
         </DialogStage>
@@ -137,7 +136,6 @@ export function EnrollmentCommandState() {
             onRetry={noop}
             onRegenerate={noop}
             connectedHost={null}
-            serverMachineName="Mac mini"
             onOpenMachine={noop}
           />
         </DialogStage>
@@ -156,7 +154,6 @@ export function EnrollmentCommandState() {
             onRetry={noop}
             onRegenerate={noop}
             connectedHost={null}
-            serverMachineName="Mac mini"
             onOpenMachine={noop}
           />
         </DialogStage>
@@ -175,7 +172,6 @@ export function EnrollmentCommandState() {
             onRetry={noop}
             onRegenerate={noop}
             connectedHost={null}
-            serverMachineName="Mac mini"
             onOpenMachine={noop}
           />
         </DialogStage>
@@ -191,7 +187,6 @@ export function EnrollmentCommandState() {
               expiresAt: issuedAt + 15 * 60_000,
             }}
             connectedHost={CONNECTED_HOST}
-            serverMachineName="Mac mini"
             errorMessage={null}
             onRetry={noop}
             onRegenerate={noop}
@@ -210,7 +205,6 @@ export function EnrollmentCommandState() {
             onRetry={noop}
             onRegenerate={noop}
             connectedHost={null}
-            serverMachineName="Mac mini"
             onOpenMachine={noop}
           />
         </DialogStage>

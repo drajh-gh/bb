@@ -210,7 +210,6 @@ describe("getProviderStates", () => {
               permissionModes: ["full"],
             },
             composerActions: [],
-            completedTurnDisplay: "collapse",
           },
           serverCapabilities: {
             reasoningLevels: ["medium"],

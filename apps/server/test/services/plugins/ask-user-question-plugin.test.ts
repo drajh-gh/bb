@@ -83,7 +83,7 @@ describe("ask-user-question builtin plugin", () => {
     return command.dynamicTools;
   }
 
-  it("advertises the tool to codex with the Zod-derived schema", async () => {
+  it("advertises the tool to codex with Claude's exact schema", async () => {
     const tools = await dynamicToolsFor({
       providerId: "codex",
       model: "gpt-5.6",
@@ -124,6 +124,7 @@ describe("ask-user-question builtin plugin", () => {
       "question",
       "header",
       "options",
+      "multiSelect",
     ]);
     expect(
       schema.properties.questions.items.properties.multiSelect.default,

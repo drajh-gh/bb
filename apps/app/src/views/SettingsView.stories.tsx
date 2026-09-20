@@ -1,4 +1,3 @@
-import { CliSkillsSettingsSectionContent } from "@/components/settings/CliSkillsSettingsSection";
 import { useEffect, useRef, useState } from "react";
 import { Route, Routes, useNavigate } from "react-router-dom";
 import {
@@ -18,7 +17,6 @@ import { ArchivedThreadsSettingsSection } from "@/components/settings/ArchivedTh
 import { CommunitySettingsSection } from "@/components/settings/CommunitySettingsSection";
 import { KeyboardSettingsSection } from "@/components/settings/KeyboardSettingsSection";
 import { MarketplacesSettingsSection } from "@/components/settings/MarketplacesSettingsSection";
-import { MachineEnvironmentSettings } from "@/components/settings/MachineEnvironmentSettings";
 import { MachinesSettingsSection } from "@/components/settings/MachinesSettingsSection";
 import { ProjectsSettingsSection } from "@/components/settings/ProjectsSettingsSection";
 import {
@@ -39,7 +37,7 @@ import {
 } from "@/lib/route-paths";
 import {
   AppearanceSettingsSection,
-  PrivacySettingsSection,
+  DebugSettingsSection,
   ExperimentsSettingsSection,
   GeneralSettingsSection,
   LocalOpenTargetSettingsSection,
@@ -122,7 +120,6 @@ function useSettingsStoryState() {
   const [steerActiveThreadOnEnter, setSteerActiveThreadOnEnter] =
     useState(false);
   const [streamerMode, setStreamerMode] = useState(false);
-  const [telemetryEnabled, setTelemetryEnabled] = useState(true);
   const [managedBranchPrefix, setManagedBranchPrefix] = useState(
     defaultAppSettings.managedBranchPrefix,
   );
@@ -149,8 +146,6 @@ function useSettingsStoryState() {
     richTextEditing,
     steerActiveThreadOnEnter,
     streamerMode,
-    telemetryEnabled,
-    setTelemetryEnabled,
     showDiagnosticEvents,
     setAppearance,
     setDirectoryTargetId,
@@ -208,23 +203,14 @@ function GeneralSettingsStory({
         onRewriteLocalhostLinksChange={state.setRewriteLocalhostLinks}
         onRichTextEditingChange={state.setRichTextEditing}
         onSteerActiveThreadOnEnterChange={state.setSteerActiveThreadOnEnter}
+        onStreamerModeChange={state.setStreamerMode}
         openLinksInAppBrowser={state.openLinksInAppBrowser}
         rewriteLocalhostLinks={state.rewriteLocalhostLinks}
         richTextEditing={state.richTextEditing}
         steerActiveThreadOnEnter={state.steerActiveThreadOnEnter}
-      />
-      <CliSkillsSettingsSectionContent
-        hasConnectedMachine={false}
-        onOpenPicker={() => {}}
-        pending={false}
-        statusBadge={null}
-      />
-      <VoiceInputStory />
-      <PrivacySettingsSection
-        onStreamerModeChange={state.setStreamerMode}
-        telemetryEnabled={state.telemetryEnabled}
-        onTelemetryEnabledChange={state.setTelemetryEnabled}
         streamerMode={state.streamerMode}
+      />
+      <DebugSettingsSection
         disabled={false}
         enabled={state.showDiagnosticEvents}
         onEnabledChange={state.setShowDiagnosticEvents}
@@ -344,8 +330,6 @@ function SettingsStoryContent({ route }: { route: SettingsStoryRoute }) {
       return <ProjectsSettingsSection />;
     case "machines":
       return <MachinesSettingsSection />;
-    case "environment-variables":
-      return <MachineEnvironmentSettings />;
     case "updates":
       return <SettingsUpdatesStory />;
     case "experiments":
@@ -360,6 +344,7 @@ function SettingsStoryContent({ route }: { route: SettingsStoryRoute }) {
       return (
         <>
           <GeneralSettingsStory desktopBrowserAvailable />
+          <VoiceInputStory />
         </>
       );
   }

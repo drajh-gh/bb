@@ -9,7 +9,7 @@ import {
   pruneBackgroundTaskProgressEvents,
   pruneResolvedItemDeltas,
   pruneThreadEventsBeforeSequence,
-  pruneTokenUsageEvents,
+  pruneTokenUsageEventsBeforeSequence,
   type InsertEventInput,
 } from "../../src/data/events.js";
 import { upsertHost } from "../../src/data/hosts.js";
@@ -198,12 +198,13 @@ describe("thread event rewrite generation", () => {
       seed: (threadId) =>
         [1, 2, 3, 4].map((sequence) => tokenUsage(threadId, sequence)),
       noop: (db, threadId) =>
-        pruneTokenUsageEvents(db, {
-          afterSequence: 4,
+        pruneTokenUsageEventsBeforeSequence(db, {
+          sequenceCutoff: 1,
           threadId,
         }),
       rewrite: (db, threadId) =>
-        pruneTokenUsageEvents(db, {
+        pruneTokenUsageEventsBeforeSequence(db, {
+          sequenceCutoff: 4,
           threadId,
         }),
     },

@@ -1,11 +1,7 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 import type { AgentRuntimeBridgeLaunch } from "@bb/agent-runtime";
 import { flattenPromptInputGroups } from "@bb/domain";
-import {
-  COMPETING_TURN_ERROR_CODE,
-  type HostDaemonCommandResult,
-} from "@bb/host-daemon-contract";
+import type { HostDaemonCommandResult } from "@bb/host-daemon-contract";
 import type { RuntimeEntry } from "../runtime-manager.js";
 import {
   CommandDispatchError,
@@ -49,18 +45,6 @@ interface StageThreadCommandInputArgs {
 interface StagedThreadCommandInput {
   cleanup: () => Promise<void>;
   input: TurnSubmitCommand["input"];
-}
-
-export async function deleteThreadStorage(
-  command: CommandOf<"thread.storage.delete">,
-  options: CommandDispatchOptions,
-): Promise<void> {
-  const storagePath = requireContainedPath(
-    options.threadStorageRootPath,
-    path.join(options.threadStorageRootPath, command.threadId),
-    "Thread storage path escapes the storage root",
-  );
-  await fs.rm(storagePath, { recursive: true, force: true });
 }
 
 type ThreadStartRuntimeCommand =
@@ -407,8 +391,7 @@ async function resolveLiveSubmittedTurnTarget(
     return refreshedTurnId;
   }
   if (entry.runtime.getLiveThreadIds().includes(command.threadId)) {
-    throw new CommandDispatchError(
-      COMPETING_TURN_ERROR_CODE,
+    throw new Error(
       `Refusing to start a competing turn while ${command.threadId} is still starting`,
     );
   }

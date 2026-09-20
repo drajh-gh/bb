@@ -1,5 +1,6 @@
 import { replaceMachineEnvironment } from "../../src/services/machines/environment-settings.js";
 import * as gitCredentials from "../../src/services/machines/git-credentials.js";
+import { updateHost } from "@bb/db";
 import {
   createTerminalSession,
   getTerminalSession,
@@ -9,7 +10,6 @@ import {
 } from "@bb/db";
 import type { EnvironmentStatus, TerminalSessionCloseReason } from "@bb/domain";
 import {
-  hostDaemonOnlineRpcResponseMessageSchema,
   hostDaemonServerWsMessageSchema,
   type HostDaemonServerWsMessage,
 } from "@bb/host-daemon-contract";
@@ -27,7 +27,6 @@ import {
   seedEnvironment,
   seedHost,
   seedHostSession,
-  seedPrimaryHost,
   seedProjectWithSource,
   seedSession,
   seedThread,
@@ -391,7 +390,7 @@ describe("public terminal routes", () => {
     }
   });
 
-  it("uses global variables everywhere while forwarding automatic credentials only to secondary hosts", async () => {
+  it("resolves host credentials for machine terminals and excludes local terminals", async () => {
     const resolve = vi
       .spyOn(gitCredentials, "resolveGitCredentials")
       .mockResolvedValue([
@@ -403,16 +402,13 @@ describe("public terminal routes", () => {
         },
       ]);
     try {
-      for (const primary of [true, false]) {
+      for (const enrolled of [false, true]) {
         const fixture = await createTerminalRouteFixture();
         harnesses.push(fixture.harness);
-        if (primary) seedPrimaryHost(fixture.harness.deps, fixture.host.id);
-        else {
-          const primaryHost = seedHost(fixture.harness.deps, {
-            id: `primary-${fixture.host.id}`,
+        if (enrolled)
+          updateHost(fixture.harness.db, fixture.harness.hub, fixture.host.id, {
+            machineProviderId: "manual",
           });
-          seedPrimaryHost(fixture.harness.deps, primaryHost.id);
-        }
         await replaceMachineEnvironment(
           fixture.harness.db,
           fixture.harness.config.dataDir,
@@ -423,13 +419,17 @@ describe("public terminal routes", () => {
           },
         );
         const pending = await startPendingTerminalOpen(fixture);
-        expect(pending.openMessage.contributedEnv).toEqual([
-          ...(!primary ? await resolve() : []),
-          expect.objectContaining({
-            name: "CUSTOM_TERMINAL",
-            value: "terminal-value",
-          }),
-        ]);
+        expect(pending.openMessage.contributedEnv).toEqual(
+          enrolled
+            ? [
+                ...(await resolve()),
+                expect.objectContaining({
+                  name: "CUSTOM_TERMINAL",
+                  value: "terminal-value",
+                }),
+              ]
+            : [],
+        );
         acknowledgeTerminalOpen(fixture, pending.openMessage);
         expect((await pending.responsePromise).status).toBe(201);
         expect(
@@ -1542,28 +1542,6 @@ describe("public terminal routes", () => {
       terminalId: stored.id,
       reason: "thread-deleted",
     });
-    const storageDeleteRequest = await waitForDaemonMessage(fixture.socket, 1);
-    expect(storageDeleteRequest).toMatchObject({
-      type: "host-rpc.request",
-      command: {
-        type: "thread.storage.delete",
-        threadId: fixture.thread.id,
-      },
-    });
-    if (storageDeleteRequest.type !== "host-rpc.request") {
-      throw new Error("Expected thread storage deletion request");
-    }
-    fixture.harness.hub.recordHostOnlineRpcResponse({
-      message: hostDaemonOnlineRpcResponseMessageSchema.parse({
-        type: "host-rpc.response",
-        requestId: storageDeleteRequest.requestId,
-        commandType: "thread.storage.delete",
-        ok: true,
-        result: { providerCheckpointId: null },
-      }),
-      sessionId: fixture.session.id,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(
       listTerminalSessionsByThread(fixture.harness.db, fixture.thread.id),
     ).toEqual([]);

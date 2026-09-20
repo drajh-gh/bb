@@ -12,20 +12,13 @@ import { ResourceOverflowMenu } from "@bb/shared-ui/resource-list";
 import { MachineLifecycleActions } from "@/components/machines/MachineLifecycleActions";
 import {
   MachineRemoveDialog,
-  serverMachineRemoveDisabledReason,
   machineRemovalConsequences,
 } from "@/components/machines/MachineRemoveDialog";
 import { MachineStatusDot } from "@/components/machines/MachineStatusDot";
-import { MoveServerDialog } from "@/components/machines/MoveServerDialog";
-import {
-  OldServerCopySection,
-  hasOldServerCopy,
-} from "@/components/machines/OldServerCopySection";
 import {
   machineStatusLabel,
   machineStatusTone,
 } from "@/components/machines/machine-status";
-import { canMoveServerHere } from "@/components/machines/server-move";
 import { MachineLabel } from "@/components/machines/MachineLabel";
 import { PageShell } from "@/components/ui/page-shell.js";
 import {
@@ -47,7 +40,6 @@ import {
 } from "@/hooks/mutations/host-mutations";
 import { useHosts } from "@/hooks/queries/host-queries";
 import { useSystemMachineProviders } from "@/hooks/queries/machine-provider-queries";
-import { useServerMoveStatus } from "@/hooks/queries/server-move-queries";
 import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
 import {
   useSystemConfig,
@@ -72,6 +64,8 @@ import {
   getSettingsProjectRoutePath,
   getSettingsRoutePath,
 } from "@/lib/route-paths";
+
+const PRIMARY_REMOVE_DISABLED_REASON = "bb's primary machine can't be removed.";
 
 const PERMISSION_LIMIT_DESCRIPTION =
   "Highest permission mode any thread on the selected machine may run with. Threads that ask for more resolve down to it, and a provider that supports nothing this low can't run here.";
@@ -172,15 +166,13 @@ export function MachineSettingsHeader({
   now,
   isPrimary,
   isThisMachine,
-  showServerBadge,
+  showPrimaryBadge,
   lifecycleNotice,
   lifecycleActionPending,
   onSuspend,
   onResume,
   onRetryCleanup,
   onRename,
-  canMoveServerHere,
-  onMoveServerHere,
 }: {
   host: Host;
   machineProvider: SystemMachineProvider | null;
@@ -188,7 +180,7 @@ export function MachineSettingsHeader({
   now: number;
   isPrimary: boolean;
   isThisMachine: boolean;
-  showServerBadge: boolean;
+  showPrimaryBadge: boolean;
   lifecycleNotice: ComponentProps<
     typeof MachineLifecycleNoticeContent
   >["notice"];
@@ -197,8 +189,6 @@ export function MachineSettingsHeader({
   onResume: () => void;
   onRetryCleanup: () => void;
   onRename: () => void;
-  canMoveServerHere: boolean;
-  onMoveServerHere: () => void;
 }) {
   return (
     <div className="space-y-3">
@@ -216,7 +206,7 @@ export function MachineSettingsHeader({
               <MachineLabel host={host} machineProvider={machineProvider} />
             </h1>
             {isThisMachine ? <SettingsBadge>This machine</SettingsBadge> : null}
-            {showServerBadge ? <SettingsBadge>Server</SettingsBadge> : null}
+            {showPrimaryBadge ? <SettingsBadge>Primary</SettingsBadge> : null}
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <MachineStatusDot tone={machineStatusTone(host)} />
@@ -238,18 +228,7 @@ export function MachineSettingsHeader({
           />
           <ResourceOverflowMenu
             label={`${host.name} actions`}
-            items={[
-              { label: "Rename", icon: "Edit", onSelect: onRename },
-              ...(canMoveServerHere
-                ? [
-                    {
-                      label: "Move server here",
-                      icon: "MoveTo",
-                      onSelect: onMoveServerHere,
-                    },
-                  ]
-                : []),
-            ]}
+            items={[{ label: "Rename", icon: "Edit", onSelect: onRename }]}
           />
         </div>
       </div>
@@ -272,10 +251,8 @@ export function MachineSettingsView() {
   const resumeHost = useResumeHost();
   const retryHostCleanup = useRetryHostCleanup();
   const updatePermissionCeiling = useUpdateHostPermissionCeiling();
-  const serverMoveStatus = useServerMoveStatus();
   const [renameOpen, setRenameOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
-  const [moveServerOpen, setMoveServerOpen] = useState(false);
 
   const hosts = hostsQuery.data;
   const host = hosts?.find((candidate) => candidate.id === hostId) ?? null;
@@ -285,13 +262,10 @@ export function MachineSettingsView() {
       ? null
       : { phase: host.lifecycle.phase, message: lifecycleMessage };
   const primaryHostId = systemConfig.data?.primaryHostId ?? null;
-  const serverMoveEnabled = systemConfig.data?.experiments.serverMove ?? false;
   const isPrimary = host !== null && host.id === primaryHostId;
-  const showThisMachineBadge =
-    (hosts?.filter((candidate) => candidate.type === "persistent").length ??
-      0) > 1;
+  const showMachineIdentityBadges = (hosts?.length ?? 0) > 1;
   const isThisMachine =
-    showThisMachineBadge && host !== null && host.id === localDaemonHostId;
+    showMachineIdentityBadges && host !== null && host.id === localDaemonHostId;
   const machineProvider =
     host?.machineProviderId === null || host?.machineProviderId === undefined
       ? null
@@ -378,7 +352,6 @@ export function MachineSettingsView() {
   }
 
   const updateStatus = formatHostUpdateStatus(host);
-  const lastServerMove = serverMoveStatus.data?.lastMove ?? null;
 
   return (
     <PageShell contentClassName="pt-4 md:pt-5">
@@ -390,7 +363,7 @@ export function MachineSettingsView() {
           now={now}
           isPrimary={isPrimary}
           isThisMachine={isThisMachine}
-          showServerBadge={isPrimary}
+          showPrimaryBadge={showMachineIdentityBadges && isPrimary}
           lifecycleNotice={lifecycleNotice}
           lifecycleActionPending={
             suspendHost.isPending ||
@@ -404,16 +377,6 @@ export function MachineSettingsView() {
             renameHost.reset();
             setRenameOpen(true);
           }}
-          canMoveServerHere={
-            systemConfig.data !== undefined &&
-            canMoveServerHere({
-              host,
-              primaryHostId,
-              move: serverMoveStatus.data?.move ?? null,
-              serverMoveEnabled,
-            })
-          }
-          onMoveServerHere={() => setMoveServerOpen(true)}
         />
 
         <SettingsSection
@@ -551,15 +514,11 @@ export function MachineSettingsView() {
           </SettingsRowList>
         </SettingsSection>
 
-        {serverMoveEnabled && hasOldServerCopy(host, lastServerMove) ? (
-          <OldServerCopySection host={host} lastMove={lastServerMove} />
-        ) : null}
-
         <SettingsSection
           title="Danger zone"
           description={
             isPrimary
-              ? serverMachineRemoveDisabledReason(serverMoveEnabled)
+              ? PRIMARY_REMOVE_DISABLED_REASON
               : `Revokes ${host.name}'s access to this server. ${machineRemovalConsequences(host)}`
           }
         >
@@ -605,11 +564,6 @@ export function MachineSettingsView() {
         target={removeOpen ? host : null}
         onOpenChange={setRemoveOpen}
         onRemoved={() => navigate(getSettingsRoutePath("machines"))}
-      />
-
-      <MoveServerDialog
-        target={moveServerOpen ? host : null}
-        onOpenChange={setMoveServerOpen}
       />
     </PageShell>
   );

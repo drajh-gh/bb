@@ -26,8 +26,6 @@ export interface ParsedArgs {
 
 const VALUELESS_FLAGS = new Set([
   "active",
-  "archived",
-  "include-archived",
   "help",
   "json",
   "no-due",

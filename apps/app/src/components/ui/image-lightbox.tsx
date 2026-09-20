@@ -169,15 +169,7 @@ export function ImageLightbox({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    hasNavigation,
-    isVisible,
-    onClose,
-    onNext,
-    onPrevious,
-    nextDisabled,
-    previousDisabled,
-  ]);
+  }, [hasNavigation, isVisible, onClose, onNext, onPrevious, nextDisabled, previousDisabled]);
 
   if (!isVisible) {
     return null;

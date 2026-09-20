@@ -47,7 +47,6 @@ export interface TestAppHarness {
   hub: NotificationHub;
   pluginService: ReturnType<typeof createApp>["pluginService"];
   pluginCatalogService: ReturnType<typeof createApp>["pluginCatalogService"];
-  serverMove: ReturnType<typeof createApp>["serverMove"];
   cleanup(): Promise<void>;
 }
 
@@ -279,8 +278,7 @@ export async function createTestAppHarness(
     sharedPorts,
     workspaceReadCaches,
   };
-  const { app, pluginCatalogService, pluginService, serverMove } =
-    createApp(deps);
+  const { app, pluginCatalogService, pluginService } = createApp(deps);
   installDefaultEnvironmentProviders();
 
   return {
@@ -291,7 +289,6 @@ export async function createTestAppHarness(
     hub,
     pluginService,
     pluginCatalogService,
-    serverMove,
     async cleanup(): Promise<void> {
       clearAllThreadProvisionSchedules();
       setPluginEnvironmentProviderBridge(undefined);
@@ -333,8 +330,9 @@ export async function startTestServer(
 ): Promise<RunningTestServer> {
   const harness = await createTestAppHarness(overrides);
   let addressInfo: AddressInfo | null = null;
-  const { app, closeWebSockets, injectWebSocket, pluginService, serverMove } =
-    createApp(harness.deps);
+  const { app, closeWebSockets, injectWebSocket, pluginService } = createApp(
+    harness.deps,
+  );
   const server = serve(
     {
       hostname: TEST_SERVER_HOST,
@@ -357,7 +355,6 @@ export async function startTestServer(
     ...harness,
     app,
     pluginService,
-    serverMove,
     baseUrl: `http://${TEST_SERVER_HOST}:${resolvedAddress.port}`,
     async close(): Promise<void> {
       const closeServer = new Promise<void>((resolve, reject) => {

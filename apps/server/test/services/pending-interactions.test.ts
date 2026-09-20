@@ -31,10 +31,6 @@ import {
   createUserQuestionPayload,
 } from "../helpers/pending-interactions.js";
 import { withTestHarness } from "../helpers/test-app.js";
-import {
-  SERVER_MOVE_FROZEN_RETRY_MS,
-  setServerMoveFrozen,
-} from "../../src/services/server-move/freeze-state.js";
 
 function registerPendingInteraction(
   deps: Pick<AppDeps, "db" | "hub">,
@@ -121,39 +117,6 @@ describe("pending interaction lifecycle", () => {
       } finally {
         controller.abort();
         emit.mockRestore();
-      }
-    });
-  });
-
-  it("holds a plugin interaction timeout while the server is moving", async () => {
-    await withTestHarness(async (harness) => {
-      const thread = seedPluginInteractionThread(
-        harness.deps,
-        "frozen-timeout",
-      );
-      const listPending = () =>
-        harness.deps.pendingInteractions.listPendingThreadInteractions(
-          thread.id,
-        );
-      vi.useFakeTimers();
-      try {
-        const pending = requestPluginInteraction(harness.deps, {
-          threadId: thread.id,
-        });
-        setServerMoveFrozen(harness.db, true);
-        await vi.advanceTimersByTimeAsync(10_000 + SERVER_MOVE_FROZEN_RETRY_MS);
-        expect(listPending()).toMatchObject([{ status: "pending" }]);
-
-        setServerMoveFrozen(harness.db, false);
-        await vi.advanceTimersByTimeAsync(SERVER_MOVE_FROZEN_RETRY_MS);
-        await expect(pending).resolves.toEqual({
-          outcome: "cancelled",
-          reason: "timeout",
-        });
-        expect(listPending()).toEqual([]);
-      } finally {
-        setServerMoveFrozen(harness.db, false);
-        vi.useRealTimers();
       }
     });
   });
@@ -2114,39 +2077,5 @@ describe("pending interaction lifecycle", () => {
         }).status,
       ).toBe("pending");
     });
-  });
-});
-
-it("rejects a late answer when an abort callback settled the waiter but failed to update storage", async () => {
-  await withTestHarness(async (harness) => {
-    const thread = seedPluginInteractionThread(harness.deps, "orphan");
-    const controller = new AbortController();
-    const pending = requestPluginInteraction(harness.deps, {
-      threadId: thread.id,
-      signal: controller.signal,
-    });
-    const [interaction] =
-      harness.deps.pendingInteractions.listPendingThreadInteractions(thread.id);
-    const cancel = vi
-      .spyOn(harness.deps.pendingInteractions, "cancelPluginInteraction")
-      .mockImplementationOnce(() => {
-        throw new Error("storage temporarily unavailable");
-      });
-    controller.abort();
-    await expect(pending).resolves.toMatchObject({ outcome: "cancelled" });
-    cancel.mockRestore();
-    expect(() =>
-      harness.deps.pendingInteractions.respondToPluginInteraction({
-        threadId: thread.id,
-        interactionId: interaction!.id,
-        value: "lost answer",
-      }),
-    ).toThrow();
-    expect(
-      harness.deps.pendingInteractions.getThreadInteraction({
-        threadId: thread.id,
-        interactionId: interaction!.id,
-      }),
-    ).toMatchObject({ status: "interrupted", resolution: null });
   });
 });

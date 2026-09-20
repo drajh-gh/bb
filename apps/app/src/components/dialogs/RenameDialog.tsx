@@ -1,8 +1,6 @@
 import { capitalize } from "@bb/thread-view";
 import {
-  useCallback,
   useId,
-  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -34,42 +32,12 @@ export function RenameDialog({
   shellClassName,
   children,
 }: RenameDialogProps) {
-  const { inputRef, handleOpenAutoFocus: focusInputOnOpen } =
-    useRenameDialogAutoFocus();
-  const returnFocusRef = useRef<HTMLElement | null>(null);
-  const capturedOpenFocusRef = useRef(false);
-  const handleOpenAutoFocus = useCallback(
-    (event: Event) => {
-      if (!capturedOpenFocusRef.current) {
-        const activeElement = document.activeElement;
-        returnFocusRef.current =
-          activeElement instanceof HTMLElement &&
-          activeElement !== document.body
-            ? activeElement
-            : null;
-        capturedOpenFocusRef.current = true;
-      }
-      focusInputOnOpen(event);
-    },
-    [focusInputOnOpen],
-  );
-  const handleAfterCloseAutoFocus = useCallback(() => {
-    const returnFocus = returnFocusRef.current;
-    returnFocusRef.current = null;
-    capturedOpenFocusRef.current = false;
-    if (
-      returnFocus?.isConnected &&
-      returnFocus.closest('[aria-hidden="true"], [inert]') === null
-    ) {
-      returnFocus.focus({ preventScroll: true });
-    }
-  }, []);
+  const { inputRef, handleOpenAutoFocus } = useRenameDialogAutoFocus();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={shellClassName}
         onOpenAutoFocus={handleOpenAutoFocus}
-        onAfterCloseAutoFocus={handleAfterCloseAutoFocus}
       >
         {children(inputRef)}
       </DialogContent>

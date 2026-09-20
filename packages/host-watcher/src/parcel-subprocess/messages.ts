@@ -20,12 +20,7 @@ export type ChildToParentMessage =
   | { kind: "ready" }
   | { kind: "pong"; nonce: number }
   | { kind: "subscribed"; id: string }
-  | {
-      kind: "subscribe-failed";
-      id: string;
-      message: string;
-      recovery: "retry-subscription" | "recycle-child";
-    }
+  | { kind: "subscribe-failed"; id: string; message: string }
   | { kind: "unsubscribed"; id: string }
   | { kind: "events"; id: string; events: SerializedParcelEvent[] }
   | {

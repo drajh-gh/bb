@@ -10,14 +10,7 @@ import { EMPTY_FILTERS, type ListFilterState } from "./filter-bar.js";
 export const LIST_PREFERENCE_STORAGE_KEY = "bb-tasks:list-preferences";
 export const LIST_PREFERENCE_VERSION = 1 as const;
 
-type ListPreferenceScope =
-  | "all"
-  | "active"
-  | "recent"
-  | "archive"
-  | `project:${string}`
-  | `recent:${string}`
-  | `archive:${string}`;
+type ListPreferenceScope = "all" | "active" | `project:${string}`;
 
 export interface ListPreference {
   filters: ListFilterState;
@@ -37,15 +30,8 @@ interface StoredDocumentV1 {
 export function listPreferenceScope(
   projectId: string | null,
   activeOnly: boolean,
-  mode: "focus" | "recent" | "archive" | "active" = activeOnly
-    ? "active"
-    : "focus",
 ): ListPreferenceScope {
-  if (mode === "active") return "active";
-  if (mode === "recent")
-    return projectId === null ? "recent" : `recent:${projectId}`;
-  if (mode === "archive")
-    return projectId === null ? "archive" : `archive:${projectId}`;
+  if (activeOnly) return "active";
   if (projectId !== null) return `project:${projectId}`;
   return "all";
 }

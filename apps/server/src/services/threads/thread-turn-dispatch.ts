@@ -6,7 +6,7 @@ import type {
   Thread,
   ThreadTurnInitiator,
 } from "@bb/domain";
-import { getThread, type DbTransaction, type EnvironmentRow } from "@bb/db";
+import type { DbTransaction, EnvironmentRow } from "@bb/db";
 import type { LoggedPendingInteractionWorkSessionDeps } from "../../types.js";
 import {
   goneThreadEnvironmentDetails,
@@ -17,8 +17,7 @@ import {
   requestThreadTargetReprovision,
   scheduleThreadProvisioningAdvance,
 } from "./thread-provisioning.js";
-import { applyLoggedThreadLifecycleEventInTransaction } from "./lifecycle-outcome.js";
-import { buildThreadStatusChangeMetadata } from "./thread-runtime-display.js";
+import { applyLoggedThreadLifecycleEvent } from "./lifecycle-outcome.js";
 
 export interface ReadyThreadEnvironment extends EnvironmentRow {
   path: string;
@@ -68,17 +67,15 @@ export async function dispatchTurnDuringReprovision(
     environmentProviderSelection !== null &&
     args.environment.status !== "provisioning"
   ) {
+    const prepared = applyLoggedThreadLifecycleEvent(args.deps, {
+      event: { type: "run.preparing" },
+      threadId: args.thread.id,
+    });
+    if (!prepared.applied) {
+      throwEnvironmentNotReady(args.environment);
+    }
     requestThreadTargetReprovision(args.deps, {
-      beforeRequestAppendInTransaction: ({ tx }) => {
-        args.beforeRequestAppendInTransaction?.({ tx });
-        const prepared = applyLoggedThreadLifecycleEventInTransaction(
-          { db: tx, logger: args.deps.logger },
-          { event: { type: "run.preparing" }, threadId: args.thread.id },
-        );
-        if (!prepared.applied) {
-          throwEnvironmentNotReady(args.environment);
-        }
-      },
+      beforeRequestAppendInTransaction: args.beforeRequestAppendInTransaction,
       environment: args.environment,
       execution: args.execution,
       initiator: args.initiator,
@@ -93,14 +90,6 @@ export async function dispatchTurnDuringReprovision(
       },
       thread: args.thread,
     });
-    const startingThread = getThread(args.deps.db, args.thread.id);
-    if (startingThread !== null) {
-      args.deps.hub.notifyThread(
-        args.thread.id,
-        ["status-changed"],
-        buildThreadStatusChangeMetadata(args.deps, startingThread),
-      );
-    }
     scheduleThreadProvisioningAdvance(args.deps, args.thread.id);
     return true;
   }

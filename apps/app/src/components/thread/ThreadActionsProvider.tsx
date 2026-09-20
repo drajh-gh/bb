@@ -326,9 +326,7 @@ export function ThreadActionsProvider({
             cancel: {
               label: "Undo",
               onClick: () => {
-                for (const threadId of [
-                  ...response.archivedThreadIds,
-                ].reverse()) {
+                for (const threadId of response.archivedThreadIds) {
                   unarchiveMutate({ id: threadId });
                 }
               },
@@ -358,30 +356,24 @@ export function ThreadActionsProvider({
   const toggleRead = useCallback(
     (thread: Thread) => {
       if (getThreadReadToggleAction(thread) === "mark_unread") {
-        markUnreadMutate(
-          { threadId: thread.id },
-          {
-            onError: (error) => {
-              showMutationErrorToast({
-                error,
-                fallbackMessage: "Failed to mark thread unread",
-              });
-            },
-          },
-        );
-        return;
-      }
-      markReadMutate(
-        { threadId: thread.id },
-        {
+        markUnreadMutate({ threadId: thread.id }, {
           onError: (error) => {
             showMutationErrorToast({
               error,
-              fallbackMessage: "Failed to mark thread read",
+              fallbackMessage: "Failed to mark thread unread",
             });
           },
+        });
+        return;
+      }
+      markReadMutate({ threadId: thread.id }, {
+        onError: (error) => {
+          showMutationErrorToast({
+            error,
+            fallbackMessage: "Failed to mark thread read",
+          });
         },
-      );
+      });
     },
     [markReadMutate, markUnreadMutate],
   );

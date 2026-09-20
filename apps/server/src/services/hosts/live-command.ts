@@ -21,6 +21,7 @@ import {
 import { handleLiveCommandResultSideEffects } from "../../internal/command-results.js";
 import { NotificationBuffer } from "../lib/notification-buffer.js";
 import {
+  callHostOnlineRpc,
   callHostOnlineRpcForWork,
   isHostUnavailableApiError,
 } from "./online-rpc.js";
@@ -230,7 +231,10 @@ export async function runLiveHostCommand<
   const execution =
     args.execution ?? createLiveHostCommandExecution(args.hostId);
   try {
-    const call = callHostOnlineRpcForWork;
+    const call =
+      args.command.type === "thread.stop"
+        ? callHostOnlineRpc
+        : callHostOnlineRpcForWork;
     const sourceCommand: HostDaemonCommand = args.command;
     const command = {
       ...args.command,

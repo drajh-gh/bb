@@ -2,12 +2,7 @@ import { useCallback, useMemo } from "react";
 import type { Project, Task } from "../shared/contract.js";
 import { groupTasksByStatus } from "../views/list/lib.js";
 import { listAllTasks, useTasksQuery } from "./data.js";
-import {
-  allowsNewTask,
-  type ResolvedTasksRoute,
-  type TaskViewMode,
-  type TasksRoute,
-} from "./routes.js";
+import type { ResolvedTasksRoute, TaskViewMode, TasksRoute } from "./routes.js";
 import { Button } from "@bb/shared-ui/button";
 import { Icon } from "@bb/shared-ui/icon";
 import { cn } from "@bb/shared-ui/lib/utils";
@@ -181,12 +176,7 @@ export function TasksTopbar({
   onBack,
 }: TasksTopbarProps) {
   const project = useMemo(() => {
-    if (
-      route.kind === "project" ||
-      route.kind === "recent" ||
-      route.kind === "archive"
-    ) {
-      if (route.projectId === null) return null;
+    if (route.kind === "project") {
       return (projects ?? []).find((p) => p.id === route.projectId) ?? null;
     }
     if (route.kind === "task") {
@@ -199,7 +189,9 @@ export function TasksTopbar({
   const breadcrumb = (() => {
     switch (route.kind) {
       case "all":
-        return <span className="whitespace-nowrap font-semibold">Focus</span>;
+        return (
+          <span className="whitespace-nowrap font-semibold">All tasks</span>
+        );
       case "active":
         return (
           <span className="flex items-center gap-2">
@@ -207,29 +199,6 @@ export function TasksTopbar({
             <span className="hidden text-xs font-normal text-muted-foreground @md:inline">
               agents working now
             </span>
-          </span>
-        );
-      case "recent":
-        return (
-          <span className="flex min-w-0 items-center gap-2">
-            {project ? (
-              <span
-                aria-hidden
-                className="size-3 shrink-0 rounded-sm"
-                style={{ backgroundColor: project.color }}
-              />
-            ) : null}
-            <span className="truncate font-semibold">
-              {project
-                ? `${project.name} · Recently closed`
-                : "Recently closed"}
-            </span>
-          </span>
-        );
-      case "archive":
-        return (
-          <span className="truncate font-semibold">
-            {project ? `${project.name} · Archive` : "Archive"}
           </span>
         );
       case "manage":
@@ -323,50 +292,8 @@ export function TasksTopbar({
           />
         </span>
       ) : null}
-      {route.kind === "project" ? (
-        <>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            aria-label="Recently closed"
-            onClick={() =>
-              onNavigate({ kind: "recent", projectId: route.projectId })
-            }
-          >
-            <Icon name="TimeSchedule" className="size-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            aria-label="Archive"
-            onClick={() =>
-              onNavigate({ kind: "archive", projectId: route.projectId })
-            }
-          >
-            <Icon name="Archive" className="size-3.5" />
-          </Button>
-        </>
-      ) : null}
-      {(route.kind === "recent" || route.kind === "archive") &&
-      route.projectId !== null ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            onNavigate({
-              kind: "project",
-              projectId: route.projectId!,
-              view: null,
-            })
-          }
-        >
-          Focus
-        </Button>
-      ) : null}
       <RefreshTasksButton />
-      {allowsNewTask(route) ? (
+      {route.kind !== "task" && route.kind !== "manage" ? (
         <Button
           size="sm"
           className="h-7 gap-1.5 max-md:pointer-coarse:h-9"

@@ -29,7 +29,6 @@ import {
   PERMISSION_MODE_HELP,
   PLAN_HELP,
   buildPromptInputs,
-  uploadClientAttachmentInputs,
 } from "./helpers.js";
 import { SEND_AT_HELP, parseSendAt } from "./send-time.js";
 
@@ -442,13 +441,13 @@ export function registerActionsCommands(
     .option("--plan", PLAN_HELP)
     .option(
       "--file <path>",
-      "Upload an absolute path or file: URL from this CLI machine or pass an uploaded attachment path (repeatable)",
+      "Pass a host-readable absolute or uploaded attachment file path (repeatable)",
       collectOption,
       [],
     )
     .option(
       "--image <path>",
-      "Upload an absolute path or file: URL from this CLI machine or pass an uploaded attachment path (repeatable)",
+      "Pass a host-readable absolute or uploaded attachment image path (repeatable)",
       collectOption,
       [],
     )
@@ -564,20 +563,14 @@ async function postThreadMessage(
   args: PostThreadMessageArgs,
 ): Promise<PostThreadMessageResult> {
   const sdk = createCliBbSdk(args.getUrl());
-  const input = await uploadClientAttachmentInputs({
+  const response = await sdk.threads.send({
+    threadId: args.threadId,
     input: buildPromptInputs({
       message: args.message,
       plan: args.plan,
       files: args.files,
       images: args.images,
     }),
-    resolveProjectId: async () =>
-      (await sdk.threads.get({ threadId: args.threadId })).projectId,
-    sdk,
-  });
-  const response = await sdk.threads.send({
-    threadId: args.threadId,
-    input,
     mode:
       args.mode === "steer"
         ? "steer-if-active"

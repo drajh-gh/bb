@@ -1240,10 +1240,7 @@ describe("resolveSystemExecutionOptions", () => {
               id: "acp-example-agent",
               displayName: "Example Agent",
               available: true,
-              composerActions: [
-                { kind: "skills", trigger: "/" },
-                { kind: "skills", trigger: "$" },
-              ],
+              composerActions: [{ kind: "skills", trigger: "/" }],
               capabilities: expect.objectContaining({
                 supportsFork: false,
                 supportsServiceTier: true,

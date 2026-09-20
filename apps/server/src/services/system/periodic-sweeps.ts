@@ -1,8 +1,3 @@
-import { runThreadPruningSweep } from "./thread-pruning-sweep.js";
-import {
-  runProjectAttachmentBackfill,
-  runProjectAttachmentPrune,
-} from "../projects/attachment-maintenance.js";
 import { sweepProviderLifecycles } from "../environments/environment-engine.js";
 import { and, eq, isNull, isNotNull, inArray } from "drizzle-orm";
 import { sweepMachineLifecycles } from "../machines/provider-orchestration.js";
@@ -23,7 +18,6 @@ import {
   getDatabaseCompactionStats,
   getDatabaseFreelistStats,
   getDatabaseMaintenanceActivity,
-  getEnvironment,
   isDatabaseMaintenanceIdle,
   listDeferredLegacyTables,
   migrateNextCompletedEventItemOutput,
@@ -51,8 +45,6 @@ import {
 import {
   finalizeStoppedThread,
   hasLiveThreadStartInFlight,
-  requestThreadStorageDeletion,
-  requestThreadStopForCurrentState,
 } from "../threads/thread-lifecycle.js";
 import { advanceThreadProvisioning } from "../threads/thread-provisioning.js";
 import {
@@ -325,46 +317,13 @@ async function runThreadProvisioningOrphanCleanupSweep(
       );
     }
   }
-  const archivedThreads = deps.db
-    .select()
+  const deletedUnattachedThreads = deps.db
+    .select({ id: threads.id })
     .from(threads)
-    .where(
-      and(
-        isNotNull(threads.archivedAt),
-        isNull(threads.deletedAt),
-        inArray(threads.status, ["pending", "starting", "active", "stopping"]),
-      ),
-    )
+    .where(and(isNotNull(threads.deletedAt), isNull(threads.environmentId)))
     .all();
-  for (const thread of archivedThreads) {
-    deps.terminalSessions.closeArchivedThreadTerminals({ threadId: thread.id });
-    requestThreadStopForCurrentState(
-      deps,
-      thread,
-      thread.environmentId
-        ? getEnvironment(deps.db, thread.environmentId)
-        : null,
-    );
-  }
-  const deletedThreads = deps.db
-    .select({
-      environmentId: threads.environmentId,
-      id: threads.id,
-      storageDeletedAt: threads.storageDeletedAt,
-    })
-    .from(threads)
-    .where(isNotNull(threads.deletedAt))
-    .all();
-  for (const thread of deletedThreads) {
-    deps.terminalSessions.closeDeletedThreadTerminals({ threadId: thread.id });
-    if (thread.storageDeletedAt !== null) {
-      finalizeStoppedThread(deps, { threadId: thread.id });
-      continue;
-    }
-    const environment = thread.environmentId
-      ? getEnvironment(deps.db, thread.environmentId)
-      : null;
-    requestThreadStorageDeletion(deps, thread, environment);
+  for (const thread of deletedUnattachedThreads) {
+    finalizeStoppedThread(deps, { threadId: thread.id });
   }
 }
 
@@ -598,28 +557,10 @@ const PERIODIC_SWEEP_JOBS: PeriodicSweepJob[] = [
     run: (deps, now) => deps.pluginSchedules.sweepDueSchedules(now),
   },
   {
-    cadenceMs: 0,
-    category: "retention",
-    name: "thread-event-pruning",
-    run: runThreadPruningSweep,
-  },
-  {
     cadenceMs: DATABASE_MAINTENANCE_CHECK_INTERVAL_MS,
     category: "maintenance",
     name: "database-maintenance",
     run: runDatabaseMaintenanceSweep,
-  },
-  {
-    cadenceMs: 0,
-    category: "maintenance",
-    name: "project-attachment-backfill",
-    run: runProjectAttachmentBackfill,
-  },
-  {
-    cadenceMs: 60_000,
-    category: "retention",
-    name: "project-attachment-orphan-prune",
-    run: runProjectAttachmentPrune,
   },
 ];
 

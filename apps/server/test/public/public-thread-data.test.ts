@@ -55,15 +55,14 @@ import {
 import { readJson } from "../helpers/json.js";
 import { textInput } from "../helpers/prompt-input.js";
 import {
+  seedQueuedMessage,
   seedEnvironment,
   seedEvent,
   seedHostSession,
   seedProjectWithSource,
-  seedQueuedMessage,
   seedStoredEvent,
   seedThread,
   seedThreadFixture,
-  seedThreadIdentity,
   seedThreadRuntimeState,
 } from "../helpers/seed.js";
 import { installFakeEnvironmentProvider } from "../helpers/environment-provider.js";
@@ -2488,7 +2487,7 @@ describe("public thread data routes", () => {
   it("creates and deletes thread queued messages", async () => {
     await withTestHarness(async (harness) => {
       const capture = vi.fn<TelemetryService["capture"]>();
-      harness.deps.telemetry = { ...harness.deps.telemetry, capture };
+      harness.deps.telemetry = { capture };
       const { environment, thread } = seedThreadFixture(harness);
       seedEvent(harness.deps, {
         threadId: thread.id,
@@ -2623,7 +2622,7 @@ describe("public thread data routes", () => {
   it("queues public send requests with sender context while the target thread is active", async () => {
     await withTestHarness(async (harness) => {
       const capture = vi.fn<TelemetryService["capture"]>();
-      harness.deps.telemetry = { ...harness.deps.telemetry, capture };
+      harness.deps.telemetry = { capture };
       const { project, thread } = seedThreadFixture(harness, {
         thread: {
           status: "active",
@@ -3919,18 +3918,12 @@ describe("public thread data routes", () => {
       const senderThread = seedThread(harness.deps, {
         projectId: project.id,
       });
-      seedThreadIdentity(harness.deps, {
-        threadId: thread.id,
-        environmentId: environment.id,
-        providerThreadId: "provider-active-grouped-sender",
-        sequence: 1,
-      });
       seedEvent(harness.deps, {
         threadId: thread.id,
         environmentId: environment.id,
         providerThreadId: "provider-active-grouped-sender",
         scope: turnScope("turn-active-grouped-sender"),
-        sequence: 2,
+        sequence: 1,
         type: "turn/started",
         data: {},
       });

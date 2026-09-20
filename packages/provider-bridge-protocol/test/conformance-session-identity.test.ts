@@ -86,7 +86,6 @@ interface StubBridgeOptions {
   fork: "none" | "tip";
   blankResume?: boolean;
   blankFork?: boolean;
-  announceIdentity?: "match" | "none" | "other-id";
 }
 
 interface StubBridge {
@@ -111,26 +110,9 @@ function stubBridge(options: StubBridgeOptions): StubBridge {
       params: { threadId, deltas },
     });
   };
-  const identity = (
-    threadId: string | undefined,
-  ): { providerThreadId: string } => {
+  const identity = (): { providerThreadId: string } => {
     sessions += 1;
-    const providerThreadId = `prov-${sessions}`;
-    const announce = options.announceIdentity ?? "match";
-    if (announce !== "none") {
-      emitted.push({
-        jsonrpc: "2.0",
-        method: "thread/identity",
-        params: {
-          threadId,
-          providerThreadId:
-            announce === "match"
-              ? providerThreadId
-              : `${providerThreadId}-other`,
-        },
-      });
-    }
-    return { providerThreadId };
+    return { providerThreadId: `prov-${sessions}` };
   };
   return {
     forks,
@@ -162,12 +144,11 @@ function stubBridge(options: StubBridgeOptions): StubBridge {
             });
             return;
           case BRIDGE_REQUEST_METHODS.threadStart:
-            reply(message.id, { result: identity(params.threadId) });
+            reply(message.id, { result: identity() });
             return;
           case BRIDGE_REQUEST_METHODS.threadResume:
             reply(message.id, {
-              result:
-                options.blankResume === true ? {} : identity(params.threadId),
+              result: options.blankResume === true ? {} : identity(),
             });
             return;
           case BRIDGE_REQUEST_METHODS.threadFork:
@@ -182,8 +163,7 @@ function stubBridge(options: StubBridgeOptions): StubBridge {
               return;
             }
             reply(message.id, {
-              result:
-                options.blankFork === true ? {} : identity(params.threadId),
+              result: options.blankFork === true ? {} : identity(),
             });
             return;
           case BRIDGE_REQUEST_METHODS.threadStop:
@@ -306,48 +286,6 @@ describe("conformance session/start-identity", () => {
       ]),
     );
     expect(report.passed).toBe(false);
-  });
-});
-
-describe("conformance session/start-identity-announced", () => {
-  it("fails a bridge that returns a session but never announces it", async () => {
-    const { report } = await runStub({ fork: "tip", announceIdentity: "none" });
-    const results = byId(report);
-    expect(results.get("session/start-identity")?.status).toBe("pass");
-    expect(results.get("session/start-identity-announced")).toMatchObject({
-      status: "fail",
-      detail: expect.stringContaining(
-        'thread/start returned providerThreadId "prov-1" for thread "thr_conformance_1", but no thread/identity notification or thread.identity delta announced it',
-      ),
-    });
-    expect(results.get("session/fork-identity")?.status).toBe("pass");
-    expect(results.get("session/fork-identity-announced")?.status).toBe("fail");
-    expect(failedIds(report)).toEqual([
-      "session/start-identity-announced",
-      "session/fork-identity-announced",
-    ]);
-    expect(report.passed).toBe(false);
-  });
-
-  it("fails a bridge whose thread/identity names a different session than the result", async () => {
-    const { report } = await runStub({
-      fork: "none",
-      announceIdentity: "other-id",
-    });
-    expect(
-      byId(report).get("session/start-identity-announced")?.detail,
-    ).toContain('(thread/identity named "prov-1-other")');
-    expect(failedIds(report)).toEqual(["session/start-identity-announced"]);
-  });
-
-  it("passes a bridge that announces the returned session", async () => {
-    const { report } = await runStub({ fork: "tip" });
-    const results = byId(report);
-    expect(results.get("session/start-identity-announced")?.status).toBe(
-      "pass",
-    );
-    expect(results.get("session/fork-identity-announced")?.status).toBe("pass");
-    expect(report.passed).toBe(true);
   });
 });
 

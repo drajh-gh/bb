@@ -18,7 +18,6 @@ describe("provider info schema", () => {
       modelCatalogScope: "workspace",
       permissionModes: ["accept-edits", "auto", "full"],
     },
-    completedTurnDisplay: "collapse",
     available: true,
   };
 
@@ -55,16 +54,13 @@ describe("provider info schema", () => {
     ]);
   });
 
-  it("accepts the explicit skill trigger", () => {
-    expect(
+  it("validates action-specific fields", () => {
+    expect(() =>
       providerInfoSchema.parse({
         ...baseProviderInfo,
         composerActions: [{ kind: "skills", trigger: "$" }],
-      }).composerActions,
-    ).toEqual([{ kind: "skills", trigger: "$" }]);
-  });
-
-  it("validates action-specific fields", () => {
+      }),
+    ).toThrow();
     expect(() =>
       providerInfoSchema.parse({
         ...baseProviderInfo,

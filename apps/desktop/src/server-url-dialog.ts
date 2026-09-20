@@ -96,6 +96,7 @@ export function openServerUrlDialog(
   }
 
   const dialogWindow = createDesktopDialogWindow({
+    height: 208,
     parentWindow: args.parentWindow,
     preloadPath: args.preloadPath,
     title: "Set Server URL",

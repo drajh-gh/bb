@@ -7,26 +7,9 @@ row IDs or sequence cuts. Keep display options unchanged throughout the walk.
 
 `timelinePage.historySnapshot` identifies the history tip, grouping version,
 and display surface. A walk excludes subsequent appends. Earlier events can
-change grouping even after a turn completed. `timelinePage.olderRowsSourceSeqEnd`
-is the greatest `sourceSeqEnd` among rows the snapshot projected before the
-page's returned rows but did not return: older conversation groups, and the
-leaves a content cut omitted from the page's oldest group. It is `null` when the
-snapshot projected no such rows. When a new latest snapshot's window reaches
-the loaded tip and this value does not exceed it, `mergeLoadedTimelineWithLatest`
-keeps loaded older pages and replaces the rows the latest page covers, so
-streaming does not unload history. Otherwise a later event changed a row the
-page omitted, and loaded rows are replaced. A row that keeps changing while
-omitted, such as a long-running item before a content cut, therefore replaces
-loaded rows on each refresh.
-`completedTurnDisplay` reports whether the page projected finished turns as
-collapsed "Worked for" rows or flat rows. It is part of the display surface: a
-cursor from one display returns HTTP 400 under the other, and
-`resolveLoadedTimelineSurfaceKey` folds it into the loaded surface key, so a
-client whose pages were loaded under another display replaces them from the
-latest page instead of mixing the two.
-Discard older responses whose request cursor is no longer the loaded
-`olderCursor`. A group's cursor is its message row even when rows recorded after
-the request display before it. A legacy cursor or incompatible
+change grouping even after a turn completed, so a new latest snapshot replaces
+loaded rows instead of retaining an assumed immutable prefix. Discard older
+responses whose snapshot no longer matches. A legacy cursor or incompatible
 grouping version returns HTTP 400 `invalid_request` with a
 message that the cursor is no longer available. Reload latest to restart.
 The new response fields are optional in the wire schemas so updated clients

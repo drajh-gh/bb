@@ -4,11 +4,7 @@ import type { SystemExecutionOptionsResponse } from "@bb/server-contract";
 function provider(
   info: Pick<
     ProviderInfo,
-    | "id"
-    | "displayName"
-    | "capabilities"
-    | "composerActions"
-    | "completedTurnDisplay"
+    "id" | "displayName" | "capabilities" | "composerActions"
   >,
 ): ProviderInfo {
   return {
@@ -48,7 +44,6 @@ export const PROVIDERS: readonly ProviderInfo[] = [
         command: { trigger: "/", name: "goal", trailingText: " " },
       },
     ],
-    completedTurnDisplay: "collapse",
   }),
   provider({
     id: "claude-code",
@@ -64,7 +59,6 @@ export const PROVIDERS: readonly ProviderInfo[] = [
       modelCatalogScope: "workspace",
     },
     composerActions: [SKILLS_ACTION, PLAN_ACTION],
-    completedTurnDisplay: "flat",
   }),
   provider({
     id: "pi",
@@ -80,7 +74,6 @@ export const PROVIDERS: readonly ProviderInfo[] = [
       modelCatalogScope: "workspace",
     },
     composerActions: [SKILLS_ACTION],
-    completedTurnDisplay: "collapse",
   }),
 ];
 

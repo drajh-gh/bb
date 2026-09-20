@@ -70,7 +70,7 @@ describe("ThreadEnvironmentSummary", () => {
     ).toBe("Worktree");
   });
 
-  it("names the environment in its title rather than repeating it in a tooltip", () => {
+  it("reveals the full host and mode when the environment label is constrained", async () => {
     const { container } = render(
       <TooltipProvider delayDuration={0}>
         <ThreadEnvironmentSummary
@@ -85,10 +85,11 @@ describe("ThreadEnvironmentSummary", () => {
     );
     expect(environmentDisplay).not.toBeNull();
     expect(environmentDisplay!.className).not.toContain("max-w-[10rem]");
-    expect(environmentDisplay!.getAttribute("title")).toBe(
-      "Environment: Bersabel's MacBook Pro",
+    focusWithKeyboard(environmentDisplay!);
+
+    expect((await screen.findByRole("tooltip")).textContent).toBe(
+      "Bersabel's MacBook Pro",
     );
-    expect(environmentDisplay!.hasAttribute("tabindex")).toBe(false);
   });
 
   it("keeps matching environment and branch labels visibly separate", () => {
@@ -98,7 +99,7 @@ describe("ThreadEnvironmentSummary", () => {
           environmentLabel="bb/fix-environment-summary"
           environmentCompactLabel="bb/fix-environment-summary"
           environmentIcon="FolderGit"
-          environmentProviderName="Worktree"
+          environmentTypeLabel="Local"
           environmentCheckout={{
             copyErrorMessage: "Failed to copy branch name",
             copyLabel: "Copy branch name",
@@ -121,42 +122,31 @@ describe("ThreadEnvironmentSummary", () => {
     expect(copyButton.querySelector('[data-icon="Copy"]')).toBeNull();
   });
 
-  it("names the environment provider from its icon when the label differs", async () => {
-    render(
-      <TooltipProvider delayDuration={0}>
-        <ThreadEnvironmentSummary
-          environmentLabel="Michael-M4"
-          environmentCompactLabel="Michael-M4"
-          environmentIcon="Laptop"
-          environmentProviderName="Personal workspace"
-        />
-      </TooltipProvider>,
-    );
+  it.each(["Local", "Remote"] as const)(
+    "shows the %s environment type from the environment icon",
+    async (environmentTypeLabel) => {
+      render(
+        <TooltipProvider delayDuration={0}>
+          <ThreadEnvironmentSummary
+            environmentLabel="Bersabel's MacBook Pro"
+            environmentCompactLabel="Bersabel's MacBook Pro"
+            environmentIcon="Laptop"
+            environmentTypeLabel={environmentTypeLabel}
+          />
+        </TooltipProvider>,
+      );
 
-    focusWithKeyboard(screen.getByRole("img", { name: "Personal workspace" }));
+      focusWithKeyboard(
+        screen.getByRole("img", {
+          name: `Environment type: ${environmentTypeLabel}`,
+        }),
+      );
 
-    expect((await screen.findByRole("tooltip")).textContent).toBe(
-      "Personal workspace",
-    );
-  });
-
-  it("leaves the icon decorative when its tooltip would repeat the label", () => {
-    const { container } = render(
-      <TooltipProvider delayDuration={0}>
-        <ThreadEnvironmentSummary
-          environmentLabel="Personal workspace"
-          environmentCompactLabel="Personal workspace"
-          environmentIcon="Folder"
-          environmentProviderName="Personal workspace"
-        />
-      </TooltipProvider>,
-    );
-
-    expect(
-      screen.queryByRole("img", { name: "Personal workspace" }),
-    ).toBeNull();
-    expect(container.querySelector('[data-icon="Folder"]')).not.toBeNull();
-  });
+      expect((await screen.findByRole("tooltip")).textContent).toBe(
+        environmentTypeLabel,
+      );
+    },
+  );
 
   it("explains the create-thread action in a tooltip", async () => {
     const { container } = render(

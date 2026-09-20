@@ -290,8 +290,6 @@ export const threadEventTokenUsageBreakdownSchema = z.object({
   totalTokens: z.number(),
   inputTokens: z.number(),
   cachedInputTokens: z.number(),
-  cacheReadInputTokens: z.number().nonnegative().optional(),
-  cacheWriteInputTokens: z.number().nonnegative().optional(),
   outputTokens: z.number(),
   reasoningOutputTokens: z.number(),
 });
@@ -649,13 +647,7 @@ const unscopedProviderEventSchema = z.discriminatedUnion("type", [
             z.literal("shell"),
             z.object({ plugin: z.string() }).strict(),
             z
-              .object({
-                core: z.enum([
-                  "machine-git",
-                  "machine-environment",
-                  "project-environment",
-                ]),
-              })
+              .object({ core: z.enum(["machine-git", "machine-environment"]) })
               .strict(),
           ]),
           value: z.union([

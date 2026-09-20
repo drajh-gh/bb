@@ -13,10 +13,6 @@ import type {
   LoggedPendingInteractionWorkSessionDeps,
 } from "../../types.js";
 import { ApiError } from "../../errors.js";
-import {
-  SERVER_MOVE_FROZEN_RETRY_MS,
-  isServerMoveFrozen,
-} from "../server-move/freeze-state.js";
 
 import { appendSystemErrorEvent } from "../threads/thread-events.js";
 import { threadScope } from "@bb/domain";
@@ -95,7 +91,6 @@ export async function maintainMachine(
   });
   deps.hub.notifyHost(hostId, ["host-disconnected"]);
   try {
-    const drainDeadline = { db: deps.db, timeoutMs: 5 * 60_000 };
     await boundedDrain(async () => {
       const hooks = deps.db
         .select({ id: environmentHookOperations.id })
@@ -186,7 +181,7 @@ export async function maintainMachine(
           }),
         ),
       );
-    }, drainDeadline);
+    }, 5 * 60_000);
     pauses.delete(hostId);
     if (pending.cancelled) {
       throw new ApiError(
@@ -232,25 +227,22 @@ export async function maintainMachine(
 
 async function boundedDrain(
   run: () => Promise<void>,
-  deadline: { db: WorkSessionDeps["db"]; timeoutMs: number },
+  timeoutMs: number,
 ): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
       run(),
       new Promise<never>((_resolve, reject) => {
-        const expire = () => {
-          if (isServerMoveFrozen(deadline.db)) {
-            timer = setTimeout(expire, SERVER_MOVE_FROZEN_RETRY_MS);
-            return;
-          }
-          reject(
-            new Error(
-              "Machine drain exceeded its deadline; old compute is retained",
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                "Machine drain exceeded its deadline; old compute is retained",
+              ),
             ),
-          );
-        };
-        timer = setTimeout(expire, deadline.timeoutMs);
+          timeoutMs,
+        );
       }),
     ]);
   } finally {

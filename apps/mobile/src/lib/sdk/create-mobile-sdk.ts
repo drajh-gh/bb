@@ -17,7 +17,6 @@ export interface MobileSdk {
 export interface CreateMobileSdkOptions {
   fetch?: typeof fetch;
   onAuthFailure?: MobileFetchOptions["onAuthFailure"];
-  onServerMoved?: MobileFetchOptions["onServerMoved"];
   realtime?: Omit<CreateMobileRealtimeOptions, "url">;
 }
 
@@ -28,7 +27,6 @@ export function createMobileSdk(
   const baseFetch = options.fetch ?? ((input, init) => fetch(input, init));
   const mobileFetch = createMobileFetch(baseFetch, {
     onAuthFailure: options.onAuthFailure,
-    onServerMoved: options.onServerMoved,
   });
   const sdk = createBrowserBbSdk({
     baseUrl: profile.serverUrl,

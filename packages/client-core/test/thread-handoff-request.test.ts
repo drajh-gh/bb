@@ -21,6 +21,7 @@ const EXECUTION: ThreadHandoffExecutionSelection = {
   serviceTier: "fast",
   supportsServiceTier: true,
   permissionMode: "auto",
+  executionInputSources: { model: "explicit", reasoningLevel: "explicit" },
 };
 
 const SOURCE_MENTION = {
@@ -172,8 +173,6 @@ describe("buildThreadHandoffCreateRequest", () => {
         providerId: "explicit",
         model: "explicit",
         reasoningLevel: "explicit",
-        serviceTier: "explicit",
-        permissionMode: "explicit",
       },
       input: [
         {
@@ -202,56 +201,7 @@ describe("buildThreadHandoffCreateRequest", () => {
 
     expect(request?.environment).toEqual({ type: "project-default" });
     expect(request).not.toHaveProperty("serviceTier");
-    expect(request?.executionInputSources).toEqual({
-      providerId: "explicit",
-      model: "explicit",
-      reasoningLevel: "explicit",
-      permissionMode: "explicit",
-    });
     expect(request?.sendAt).toBe(1_700_000_000_000);
-  });
-
-  it("marks unchanged visible handoff execution as explicit", () => {
-    const request = buildThreadHandoffCreateRequest({
-      draft: { text: "Keep going", mentions: [], attachments: [] },
-      execution: {
-        ...EXECUTION,
-        providerId: "codex",
-        model: "gpt-5.6-sol",
-        serviceTier: "default",
-        permissionMode: "full",
-      },
-      seed: SEED,
-    });
-
-    expect(request?.executionInputSources).toEqual({
-      providerId: "explicit",
-      model: "explicit",
-      reasoningLevel: "explicit",
-      serviceTier: "explicit",
-      permissionMode: "explicit",
-    });
-  });
-
-  it("marks changed handoff execution as explicit", () => {
-    const request = buildThreadHandoffCreateRequest({
-      draft: { text: "Keep going", mentions: [], attachments: [] },
-      execution: {
-        ...EXECUTION,
-        model: "claude-sonnet-5",
-        reasoningLevel: "medium",
-        permissionMode: "full",
-      },
-      seed: SEED,
-    });
-
-    expect(request?.executionInputSources).toEqual({
-      providerId: "explicit",
-      model: "explicit",
-      reasoningLevel: "explicit",
-      serviceTier: "explicit",
-      permissionMode: "explicit",
-    });
   });
 
   it("returns null without follow-up input or a resolved model", () => {

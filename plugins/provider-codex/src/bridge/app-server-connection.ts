@@ -5,7 +5,6 @@ import type { z } from "zod";
 
 const STDERR_TAIL_MAX_CHUNKS = 40;
 const CLOSE_AFTER_EXIT_GRACE_MS = 1_000;
-const TERMINATE_ESCALATION_MS = 1_000;
 const KILL_ESCALATION_MS = 4_000;
 const CLOSED_STDIN_ERROR_CODES = new Set(["EPIPE", "ERR_STREAM_DESTROYED"]);
 
@@ -56,16 +55,6 @@ export class CodexAppServerExitedError extends Error {
     super(message);
     this.name = "CodexAppServerExitedError";
     this.spawnFailed = options?.spawnFailed ?? false;
-  }
-}
-
-export class CodexAppServerRpcError extends Error {
-  constructor(
-    message: string,
-    readonly code: number | undefined,
-  ) {
-    super(message);
-    this.name = "CodexAppServerRpcError";
   }
 }
 
@@ -160,27 +149,18 @@ export function createCodexAppServerConnection(
       return exitPromise;
     }
     killStarted = true;
-    const termination = setTimeout(() => {
-      if (!finalized && exitStatus === null) child.kill("SIGTERM");
-    }, TERMINATE_ESCALATION_MS);
-    termination.unref?.();
     const escalation = setTimeout(() => {
       if (!finalized) {
         child.kill("SIGKILL");
       }
     }, KILL_ESCALATION_MS);
     escalation.unref?.();
-    child.stdin?.end();
+    child.kill("SIGTERM");
     return exitPromise;
   }
 
   function handleBrokenStdin(error: Error): void {
-    if (
-      finalized ||
-      killStarted ||
-      exitStatus !== null ||
-      stdinFailure !== null
-    ) {
+    if (finalized || exitStatus !== null || stdinFailure !== null) {
       return;
     }
     const code =
@@ -195,7 +175,7 @@ export function createCodexAppServerConnection(
   }
 
   function writeLine(message: object): void {
-    if (killStarted || finalized || stdinFailure !== null) {
+    if (stdinFailure !== null) {
       return;
     }
     const stdin = child.stdin;
@@ -266,10 +246,9 @@ export function createCodexAppServerConnection(
         }
         if (message.error) {
           request.reject(
-            new CodexAppServerRpcError(
+            new Error(
               message.error.message ??
                 `codex app-server returned error code ${message.error.code ?? "unknown"}`,
-              message.error.code,
             ),
           );
         } else {
@@ -348,7 +327,7 @@ export function createCodexAppServerConnection(
     },
 
     request({ method, params, resultSchema, timeoutMs }) {
-      if (finalized || killStarted) {
+      if (finalized) {
         return Promise.reject(
           new CodexAppServerExitedError("codex app-server is not running", {
             spawnFailed,

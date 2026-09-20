@@ -761,7 +761,6 @@ function SplitTree(props: SplitTreeProps) {
       >
         {node.content.kind === "thread" ? (
           <PaneStaleWatcher
-            key={node.content.threadId}
             threadId={node.content.threadId}
             onStale={() => props.onPruneStalePane(node.paneId)}
           />
@@ -1132,7 +1131,7 @@ function NonThreadPaneContent({
               }
               className={cn(
                 "relative flex min-w-0 flex-1 items-center",
-                isBoundedPane && "-my-1 -ml-2 rounded-md px-2 py-1",
+                isBoundedPane && "-mx-2 -my-1 rounded-md px-2 py-1",
                 isBoundedPane && isFocused && CONTEXT_SELECTION_SURFACE_CLASS,
                 beginPaneDrag &&
                   cn(
@@ -1431,10 +1430,6 @@ interface PaneStaleWatcherProps {
 
 function PaneStaleWatcher({ threadId, onStale }: PaneStaleWatcherProps) {
   const { data: thread, isSuccess, isError, error } = useThread(threadId);
-  const hasObservedUnarchived = useRef(false);
-  const unarchivesInFlight = useIsMutating({
-    mutationKey: ["unarchive-thread"],
-  });
   const archivesInFlight = useIsMutating({
     predicate: (mutation) =>
       mutation.options.meta?.lifecycleOperation === "archive_thread",
@@ -1448,25 +1443,17 @@ function PaneStaleWatcher({ threadId, onStale }: PaneStaleWatcherProps) {
     thread !== undefined &&
     thread.archivedAt !== null &&
     archivesInFlight === 0;
-  const isUnarchived =
-    isSuccess && thread !== undefined && thread.archivedAt === null;
+  const isStale = isGone || isDeleted || isConfirmedArchived;
 
   const onStaleRef = useRef(onStale);
   useEffect(() => {
     onStaleRef.current = onStale;
   }, [onStale]);
   useEffect(() => {
-    if (isUnarchived && unarchivesInFlight === 0) {
-      hasObservedUnarchived.current = true;
-    }
-    if (
-      isGone ||
-      isDeleted ||
-      (isConfirmedArchived && hasObservedUnarchived.current)
-    ) {
+    if (isStale) {
       onStaleRef.current();
     }
-  }, [isConfirmedArchived, isDeleted, isGone, isUnarchived, unarchivesInFlight]);
+  }, [isStale]);
 
   return null;
 }

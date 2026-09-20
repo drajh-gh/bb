@@ -9,7 +9,7 @@ import {
   firstPartyPluginRootDir,
 } from "./first-party-provider-declarations.js";
 import {
-  integrationProviderBridgeManifestPath,
+  INTEGRATION_PROVIDER_BRIDGE_MANIFEST_PATH,
   type IntegrationProviderBridgeManifest,
 } from "./integration-provider-bridges.js";
 
@@ -67,7 +67,7 @@ export async function setup(): Promise<void> {
     }
   }
   await writeFile(
-    integrationProviderBridgeManifestPath(),
+    INTEGRATION_PROVIDER_BRIDGE_MANIFEST_PATH,
     JSON.stringify(manifest, null, 2),
   );
 }

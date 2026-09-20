@@ -129,8 +129,6 @@ const taskSchema = z
     position: z.number(),
     createdAt: z.string(),
     updatedAt: z.string(),
-    archivedAt: z.string().nullable(),
-    closedAt: z.string().nullable(),
     labelIds: z.array(idSchema),
   })
   .strict();
@@ -288,15 +286,6 @@ const attachmentDeleteResultSchema = z.union([
 const taskLabelsSchema = z
   .array(idSchema)
   .max(100)
-  .refine(
-    (ids) => new Set(ids).size === ids.length,
-    "must not contain duplicates",
-  );
-export const TASK_ARCHIVE_BATCH_MAX = 500;
-const taskBatchIdsSchema = z
-  .array(idSchema)
-  .min(1)
-  .max(TASK_ARCHIVE_BATCH_MAX)
   .refine(
     (ids) => new Set(ids).size === ids.length,
     "must not contain duplicates",
@@ -513,26 +502,6 @@ export const tasksRpcContract = defineRpcContract({
     input: z.object({ taskId: idSchema }).strict(),
     output: z.object({ deleted: z.boolean() }).strict(),
   },
-  archiveTasks: {
-    input: z
-      .object({
-        projectId: idSchema,
-        taskIds: taskBatchIdsSchema,
-        authorName: nonBlankStringSchema.default("You"),
-      })
-      .strict(),
-    output: z.object({ tasks: z.array(taskSchema) }).strict(),
-  },
-  restoreTasks: {
-    input: z
-      .object({
-        projectId: idSchema,
-        taskIds: taskBatchIdsSchema,
-        authorName: nonBlankStringSchema.default("You"),
-      })
-      .strict(),
-    output: z.object({ tasks: z.array(taskSchema) }).strict(),
-  },
   listTasks: {
     input: z
       .object({
@@ -541,7 +510,6 @@ export const tasksRpcContract = defineRpcContract({
         priorities: z.array(taskPrioritySchema).optional(),
         labelIds: z.array(idSchema).optional(),
         activeOnly: z.boolean().default(false),
-        archive: z.enum(["active", "archived", "all"]).default("active"),
         parentTaskId: idSchema.nullable().optional(),
         search: z.string().optional(),
         sort: taskSortSchema.default("manual"),

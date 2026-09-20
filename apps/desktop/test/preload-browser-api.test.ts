@@ -207,7 +207,6 @@ describe("desktop preload browser API", () => {
     expect(Object.keys(api.browser).sort()).toEqual([
       "attach",
       "detach",
-      "evaluate",
       "findInPage",
       "focus",
       "getControl",
@@ -221,7 +220,6 @@ describe("desktop preload browser API", () => {
       "onFindResult",
       "onFocus",
       "onOpenTab",
-      "onPageMessage",
       "onReveal",
       "onScopedOpenTab",
       "onSnapshot",
