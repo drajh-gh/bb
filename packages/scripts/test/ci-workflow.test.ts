@@ -15,14 +15,14 @@ import { expect, it, onTestFinished } from "vitest";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(testDir, "..", "..", "..");
 
-it("limits concurrent Turbo test tasks to the CI runner CPU count", () => {
+it("limits concurrent Turbo test tasks to the two-worker CI budget", () => {
   const workflow = readFileSync(
     resolve(repoRoot, ".github", "workflows", "ci.yml"),
     "utf8",
   );
   const testStep = /- name: Test\n\s+run: ([^\n]+)/u.exec(workflow)?.[1];
 
-  expect(testStep).toContain("--concurrency=4");
+  expect(testStep).toContain("--concurrency=2");
 });
 
 it("rejects a pnpm version that disagrees with the root manifest", () => {

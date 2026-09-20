@@ -104,28 +104,32 @@ describe("PluginToolCallRegistry", () => {
     expect(registry.size).toBe(0);
   });
 
-  it("keeps a slow tool on its round trip beyond the former deadline", async () => {
-    const registry = createRegistry();
-    const onDetachedResult = vi.fn(async () => undefined);
-    const result = deferred<ToolCallResponse>();
-    const response = registry.run({
-      pluginId: "fixture",
-      threadId: "thread",
-      callId: "call",
-      toolName: "ordinary",
-      roundTrip: new AbortController().signal,
-      invoke: () => result.promise,
-      onDetachedResult,
-    });
-    const received = vi.fn();
-    void response.then(received);
-    await vi.advanceTimersByTimeAsync(10 * 60_000);
-    expect(received).not.toHaveBeenCalled();
-    result.resolve(textResponse("finished"));
-    await expect(response).resolves.toEqual(textResponse("finished"));
-    expect(onDetachedResult).not.toHaveBeenCalled();
-    expect(registry.size).toBe(0);
-  });
+  it(
+    "keeps a slow tool on its round trip beyond the former deadline",
+    async () => {
+      const registry = createRegistry();
+      const onDetachedResult = vi.fn(async () => undefined);
+      const result = deferred<ToolCallResponse>();
+      const response = registry.run({
+        pluginId: "fixture",
+        threadId: "thread",
+        callId: "call",
+        toolName: "ordinary",
+        roundTrip: new AbortController().signal,
+        invoke: () => result.promise,
+        onDetachedResult,
+      });
+      const received = vi.fn();
+      void response.then(received);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(received).not.toHaveBeenCalled();
+      result.resolve(textResponse("finished"));
+      await expect(response).resolves.toEqual(textResponse("finished"));
+      expect(onDetachedResult).not.toHaveBeenCalled();
+      expect(registry.size).toBe(0);
+    },
+    10_000,
+  );
 
   it("answers the round trip at once when the tool asks the user for input", async () => {
     const registry = createRegistry();
