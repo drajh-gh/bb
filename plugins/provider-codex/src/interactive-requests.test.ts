@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildCodexMcpElicitationCancellationResponse,
   buildCodexInteractiveResponse,
   decodeCodexInteractiveRequest,
   extractCodexMacOsPermissionRequest,
@@ -461,6 +462,158 @@ describe("decodeCodexInteractiveRequest", () => {
       },
     });
   });
+
+  it("accepts and strips unknown top-level fields from the generated-schema empty-object form", () => {
+    const decoded = decodeCodexInteractiveRequest({
+      id: "elicitation-1",
+      method: "mcpServer/elicitation/request",
+      params: {
+        serverName: "example-server",
+        threadId: "provider-thread-1",
+        turnId: "provider-turn-1",
+        mode: "form",
+        message: "Allow this MCP request?",
+        requestedSchema: {
+          $schema: null,
+          type: "object",
+          properties: {},
+          required: null,
+        },
+        _meta: { untrusted: "ignored" },
+        futureTopLevel: { secret: "top-level-sensitive" },
+      },
+    });
+
+    expect(decoded).toEqual({
+      requestId: "elicitation-1",
+      method: "mcpServer/elicitation/request",
+      providerThreadId: "provider-thread-1",
+      turnId: "provider-turn-1",
+      payload: {
+        kind: "user_question",
+        questions: [
+          {
+            id: "mcp-form-confirmation",
+            prompt: "Allow this MCP request?",
+            shortLabel: "example-server",
+            multiSelect: false,
+            options: [
+              { value: "accept", label: "Accept" },
+              { value: "decline", label: "Decline" },
+              { value: "cancel", label: "Cancel" },
+            ],
+            allowFreeText: false,
+          },
+        ],
+      },
+    });
+    expect(JSON.stringify(decoded)).not.toContain("top-level-sensitive");
+  });
+
+  it.each([
+    ["a string session capability", { persist: "session" }, true],
+    [
+      "an array containing session and always",
+      { persist: ["always", "session"] },
+      true,
+    ],
+    ["absent persistence metadata", { untrusted: "ignored" }, false],
+    ["an always-only capability", { persist: ["always"] }, false],
+    ["a malformed persistence capability", { persist: ["session", 1] }, false],
+  ])("maps %s without widening persistence", (_name, metadata, expected) => {
+    const decoded = decodeCodexInteractiveRequest({
+      id: "elicitation-persistence",
+      method: "mcpServer/elicitation/request",
+      params: {
+        serverName: "example-server",
+        threadId: "provider-thread-1",
+        turnId: "provider-turn-1",
+        mode: "form",
+        message: "Allow this MCP request?",
+        requestedSchema: { type: "object", properties: {} },
+        _meta: metadata,
+      },
+    });
+
+    expect(decoded?.payload).toMatchObject({ kind: "user_question" });
+    if (decoded?.payload.kind !== "user_question") {
+      throw new Error("Expected an MCP user-question interaction");
+    }
+    expect(decoded.payload.questions[0]?.options).toContainEqual(
+      expected
+        ? { value: "accept_for_session", label: "Allow for this session" }
+        : { value: "accept", label: "Accept" },
+    );
+    expect(
+      decoded.payload.questions[0]?.options.some(
+        (option) => option.value === "accept_for_session",
+      ),
+    ).toBe(expected);
+    expect(JSON.stringify(decoded)).not.toContain("always");
+  });
+
+  it("keeps an absent generated-schema turn id nullable for bridge correlation", () => {
+    expect(
+      decodeCodexInteractiveRequest({
+        id: "elicitation-missing-turn",
+        method: "mcpServer/elicitation/request",
+        params: {
+          serverName: "example-server",
+          threadId: "provider-thread-1",
+          mode: "form",
+          message: "Allow this MCP request?",
+          requestedSchema: { type: "object", properties: {} },
+        },
+      }),
+    ).toMatchObject({ turnId: null });
+  });
+
+  it.each([
+    ["URL mode", { mode: "url", url: "https://sensitive.example" }],
+    ["OpenAI form mode", { mode: "openai/form" }],
+    ["a missing requested schema", { requestedSchema: undefined }],
+    [
+      "a nonempty primitive form",
+      {
+        requestedSchema: {
+          type: "object",
+          properties: { secretField: { type: "boolean" } },
+        },
+      },
+    ],
+    [
+      "an unknown requested-schema field",
+      {
+        requestedSchema: {
+          type: "object",
+          properties: {},
+          futureSchemaKeyword: "sensitive-schema-value",
+        },
+      },
+    ],
+  ])("rejects %s with bounded diagnostics", (_name, patch) => {
+    let error: unknown;
+    try {
+      decodeCodexInteractiveRequest({
+        id: "elicitation-invalid",
+        method: "mcpServer/elicitation/request",
+        params: {
+          serverName: "example-server",
+          threadId: "provider-thread-1",
+          turnId: "provider-turn-1",
+          mode: "form",
+          message: "Allow this MCP request?",
+          requestedSchema: { type: "object", properties: {} },
+          ...patch,
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(ProviderRequestDecodeError);
+    expect(String(error)).toMatch(/Unsupported MCP form elicitation:/);
+    expect(String(error)).not.toContain("sensitive");
+  });
 });
 
 describe("buildCodexInteractiveResponse", () => {
@@ -580,5 +733,172 @@ describe("buildCodexInteractiveResponse", () => {
       },
       scope: "session",
     });
+  });
+
+  it.each([
+    ["accept", { action: "accept", content: {} }],
+    ["decline", { action: "decline", content: null }],
+    ["cancel", { action: "cancel", content: null }],
+  ] as const)("maps the explicit MCP form %s choice", (selected, response) => {
+    expect(
+      buildCodexInteractiveResponse({
+        payload: {
+          kind: "user_question",
+          questions: [
+            {
+              id: "mcp-form-confirmation",
+              prompt: "Allow this MCP request?",
+              shortLabel: "example-server",
+              multiSelect: false,
+              options: [
+                { value: "accept", label: "Accept" },
+                { value: "decline", label: "Decline" },
+                { value: "cancel", label: "Cancel" },
+              ],
+              allowFreeText: false,
+            },
+          ],
+        },
+        resolution: {
+          kind: "user_answer",
+          answers: {
+            "mcp-form-confirmation": { selected: [selected] },
+          },
+        },
+      }),
+    ).toEqual(response);
+  });
+
+  it("maps an advertised session choice to the exact session persistence response", () => {
+    expect(
+      buildCodexInteractiveResponse({
+        payload: {
+          kind: "user_question",
+          questions: [
+            {
+              id: "mcp-form-confirmation",
+              prompt: "Allow this MCP request?",
+              shortLabel: "example-server",
+              multiSelect: false,
+              options: [
+                { value: "accept", label: "Accept" },
+                {
+                  value: "accept_for_session",
+                  label: "Allow for this session",
+                },
+                { value: "decline", label: "Decline" },
+                { value: "cancel", label: "Cancel" },
+              ],
+              allowFreeText: false,
+            },
+          ],
+        },
+        resolution: {
+          kind: "user_answer",
+          answers: {
+            "mcp-form-confirmation": {
+              selected: ["accept_for_session"],
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      action: "accept",
+      content: null,
+      _meta: { persist: "session" },
+    });
+  });
+
+  it("rejects a session choice that the request did not advertise", () => {
+    expect(() =>
+      buildCodexInteractiveResponse({
+        payload: {
+          kind: "user_question",
+          questions: [
+            {
+              id: "mcp-form-confirmation",
+              prompt: "Allow this MCP request?",
+              shortLabel: "example-server",
+              multiSelect: false,
+              options: [
+                { value: "accept", label: "Accept" },
+                { value: "decline", label: "Decline" },
+                { value: "cancel", label: "Cancel" },
+              ],
+              allowFreeText: false,
+            },
+          ],
+        },
+        resolution: {
+          kind: "user_answer",
+          answers: {
+            "mcp-form-confirmation": {
+              selected: ["accept_for_session"],
+            },
+          },
+        },
+      }),
+    ).toThrowError(/unavailable session option/);
+  });
+
+  it("keeps lifecycle cancellation distinct from operator decline", () => {
+    expect(buildCodexMcpElicitationCancellationResponse()).toEqual({
+      action: "cancel",
+      content: null,
+    });
+  });
+
+  it.each([
+    ["a missing choice", {}],
+    [
+      "free text",
+      {
+        "mcp-form-confirmation": {
+          selected: ["accept"],
+          freeText: "approve it",
+        },
+      },
+    ],
+    [
+      "multiple choices",
+      { "mcp-form-confirmation": { selected: ["accept", "decline"] } },
+    ],
+    [
+      "an unknown choice",
+      { "mcp-form-confirmation": { selected: ["approve"] } },
+    ],
+    [
+      "an unrelated answer",
+      {
+        "mcp-form-confirmation": { selected: ["accept"] },
+        unrelated: { selected: ["accept"] },
+      },
+    ],
+  ])("rejects %s instead of defaulting to acceptance", (_name, answers) => {
+    expect(() =>
+      buildCodexInteractiveResponse({
+        payload: {
+          kind: "user_question",
+          questions: [
+            {
+              id: "mcp-form-confirmation",
+              prompt: "Allow this MCP request?",
+              shortLabel: "example-server",
+              multiSelect: false,
+              options: [
+                { value: "accept", label: "Accept" },
+                { value: "decline", label: "Decline" },
+                { value: "cancel", label: "Cancel" },
+              ],
+              allowFreeText: false,
+            },
+          ],
+        },
+        resolution: {
+          kind: "user_answer",
+          answers,
+        },
+      }),
+    ).toThrowError();
   });
 });

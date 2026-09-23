@@ -240,6 +240,7 @@ const scriptPath = scriptPathFromArgs(process.argv.slice(2));
 const script = scriptPath ? JSON.parse(readFileSync(scriptPath, "utf8")) : null;
 const scriptedTurns = script?.turns ?? null;
 const requestLogPath = script?.requestLogPath ?? null;
+const responseLogPath = script?.responseLogPath ?? null;
 const modelListFailOnceMarkerPath = script?.modelListFailOnceMarkerPath ?? null;
 /**
  * `archiveStatePath`: a JSON file of archived thread ids shared by every fake
@@ -390,9 +391,16 @@ function takeScriptedTurnIndex() {
 async function runScriptFileTurn(threadId) {
   const turn = scriptedTurns[takeScriptedTurnIndex()] ?? [];
   for (const entry of turn) {
-    const params = withThreadId(entry.params ?? {}, threadId);
+    const params =
+      entry.preserveThreadId === true
+        ? (entry.params ?? {})
+        : withThreadId(entry.params ?? {}, threadId);
     if (entry.kind === "request") {
       await requestFromClient(entry.method, params);
+      continue;
+    }
+    if (entry.kind === "requestAndContinue") {
+      void requestFromClient(entry.method, params).catch(() => {});
       continue;
     }
     if (entry.method === "turn/started") {
@@ -774,6 +782,9 @@ stdinLines.on("line", (line) => {
     const resolve = pendingOutboundRequests.get(parsed.id);
     if (resolve) {
       pendingOutboundRequests.delete(parsed.id);
+      if (responseLogPath !== null) {
+        appendFileSync(responseLogPath, `${JSON.stringify(parsed)}\n`);
+      }
       resolve(parsed);
     }
   }

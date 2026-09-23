@@ -1,8 +1,10 @@
 import {
   ProviderRequestDecodeError as ProviderRequestDecodeErrorValue,
   ProviderResponseEncodeError,
+  isApprovalInteractionOutcome,
   type ApprovalInteractionOutcome,
   type DecodedInteractiveRequest,
+  type ProviderInteractionOutcome,
   type ProviderInboundRequest,
   type PendingInteractionApprovalDecision,
   type PendingInteractionGrantablePermissionProfile,
@@ -10,6 +12,7 @@ import {
   type PendingInteractionRequestedPermissionProfile,
 } from "@get-bb/plugin-sdk/provider-bridge";
 import type { CodexMacOsPermissionItem } from "./extension-kinds.js";
+import { z } from "zod";
 import { normalizePendingInteractionRequestedPermissionProfile } from "./pending-interaction-normalization.js";
 import type { CommandExecutionRequestApprovalResponse } from "./generated/codex-app-server/schema/v2/CommandExecutionRequestApprovalResponse.js";
 import type { FileChangeRequestApprovalResponse } from "./generated/codex-app-server/schema/v2/FileChangeRequestApprovalResponse.js";
@@ -29,7 +32,86 @@ import type {
 type CodexInteractiveResponse =
   | CommandExecutionRequestApprovalResponse
   | FileChangeRequestApprovalResponse
-  | PermissionsRequestApprovalResponse;
+  | PermissionsRequestApprovalResponse
+  | CodexMcpElicitationResponse;
+
+export const CODEX_MCP_SERVER_ELICITATION_REQUEST_METHOD =
+  "mcpServer/elicitation/request";
+
+type CodexMcpElicitationResponse =
+  | { action: "accept"; content: Record<string, never> }
+  | {
+      action: "accept";
+      content: null;
+      _meta: { persist: "session" };
+    }
+  | { action: "decline" | "cancel"; content: null };
+
+const codexEmptyMcpElicitationSchema = z
+  .object({
+    type: z.literal("object"),
+    properties: z.object({}).strict(),
+    required: z.union([z.tuple([]), z.null()]).optional(),
+    $schema: z.string().max(512).nullable().optional(),
+  })
+  .strict();
+
+const codexEmptyFormElicitationParamsSchema = z
+  .object({
+    serverName: z.string().trim().min(1).max(128),
+    threadId: z.string().trim().min(1).max(256),
+    turnId: z.string().trim().min(1).max(256).nullable().optional(),
+    mode: z.literal("form"),
+    message: z.string().trim().min(1).max(1_024),
+    requestedSchema: codexEmptyMcpElicitationSchema,
+    _meta: z.unknown().optional(),
+  })
+  .strip();
+
+function formatMcpElicitationDecodeError(error: z.ZodError): string {
+  const details = error.issues
+    .slice(0, 4)
+    .map((issue) => {
+      const path = issue.path.length === 0 ? "params" : issue.path.join(".");
+      const problem =
+        issue.code === "unrecognized_keys"
+          ? "unsupported fields"
+          : issue.code === "invalid_value"
+            ? "unsupported value"
+            : issue.code === "too_big"
+              ? "exceeds supported limit"
+              : "invalid shape";
+      return `${path}: ${problem}`;
+    })
+    .join("; ");
+  return `Unsupported MCP form elicitation: ${details}`.slice(0, 512);
+}
+
+const MCP_ELICITATION_QUESTION_ID = "mcp-form-confirmation";
+const MCP_ELICITATION_ACCEPT_VALUE = "accept";
+const MCP_ELICITATION_ACCEPT_FOR_SESSION_VALUE = "accept_for_session";
+const MCP_ELICITATION_DECLINE_VALUE = "decline";
+
+function supportsMcpSessionPersistence(metadata: unknown): boolean {
+  if (
+    typeof metadata !== "object" ||
+    metadata === null ||
+    Array.isArray(metadata) ||
+    !("persist" in metadata)
+  ) {
+    return false;
+  }
+  const persist = metadata.persist;
+  if (persist === "session") {
+    return true;
+  }
+  return (
+    Array.isArray(persist) &&
+    persist.length <= 16 &&
+    persist.every((value) => typeof value === "string") &&
+    persist.includes("session")
+  );
+}
 
 function assertNever(value: never): never {
   throw new ProviderResponseEncodeError(`Unexpected value: ${String(value)}`);
@@ -198,14 +280,112 @@ export function decodeCodexInteractiveRequest(
         },
       };
     }
+    case CODEX_MCP_SERVER_ELICITATION_REQUEST_METHOD: {
+      const parsed = codexEmptyFormElicitationParamsSchema.safeParse(
+        request.params,
+      );
+      if (!parsed.success) {
+        throw new ProviderRequestDecodeErrorValue(
+          formatMcpElicitationDecodeError(parsed.error),
+        );
+      }
+      const options = [
+        { value: MCP_ELICITATION_ACCEPT_VALUE, label: "Accept" },
+        ...(supportsMcpSessionPersistence(parsed.data._meta)
+          ? [
+              {
+                value: MCP_ELICITATION_ACCEPT_FOR_SESSION_VALUE,
+                label: "Allow for this session",
+              },
+            ]
+          : []),
+        { value: MCP_ELICITATION_DECLINE_VALUE, label: "Decline" },
+        { value: "cancel", label: "Cancel" },
+      ];
+      return {
+        requestId: request.id,
+        method: request.method,
+        providerThreadId: parsed.data.threadId,
+        turnId: parsed.data.turnId ?? null,
+        payload: {
+          kind: "user_question",
+          questions: [
+            {
+              id: MCP_ELICITATION_QUESTION_ID,
+              prompt: parsed.data.message,
+              shortLabel: parsed.data.serverName,
+              multiSelect: false,
+              options,
+              allowFreeText: false,
+            },
+          ],
+        },
+      };
+    }
     default:
       return null;
   }
 }
 
 export function buildCodexInteractiveResponse(
-  args: ApprovalInteractionOutcome,
+  args: ProviderInteractionOutcome,
 ): CodexInteractiveResponse {
+  if (!isApprovalInteractionOutcome(args)) {
+    if (args.payload.kind !== "user_question") {
+      throw new ProviderResponseEncodeError(
+        "Codex plugin interactions cannot be encoded as app-server responses",
+      );
+    }
+    const question = args.payload.questions[0];
+    if (
+      args.payload.questions.length !== 1 ||
+      question?.id !== MCP_ELICITATION_QUESTION_ID
+    ) {
+      throw new ProviderResponseEncodeError(
+        "MCP form elicitation response did not match its confirmation question",
+      );
+    }
+    const answer = args.resolution.answers[MCP_ELICITATION_QUESTION_ID];
+    if (
+      Object.keys(args.resolution.answers).length !== 1 ||
+      answer === undefined ||
+      answer.freeText !== undefined ||
+      answer.selected.length !== 1
+    ) {
+      throw new ProviderResponseEncodeError(
+        "MCP form elicitation requires exactly one supported response",
+      );
+    }
+    switch (answer.selected[0]) {
+      case MCP_ELICITATION_ACCEPT_VALUE:
+        return { action: "accept", content: {} };
+      case MCP_ELICITATION_ACCEPT_FOR_SESSION_VALUE:
+        if (
+          !question.options.some(
+            (option) =>
+              option.value === MCP_ELICITATION_ACCEPT_FOR_SESSION_VALUE,
+          )
+        ) {
+          throw new ProviderResponseEncodeError(
+            "MCP form elicitation response used an unavailable session option",
+          );
+        }
+        return {
+          action: "accept",
+          content: null,
+          _meta: { persist: "session" },
+        };
+      case MCP_ELICITATION_DECLINE_VALUE:
+        return { action: "decline", content: null };
+      case "cancel":
+        return { action: "cancel", content: null };
+      default:
+        throw new ProviderResponseEncodeError(
+          "MCP form elicitation response used an unsupported option",
+        );
+    }
+  }
+
   switch (args.payload.subject.kind) {
     case "command": {
       const response: CommandExecutionRequestApprovalResponse = {
@@ -250,6 +430,10 @@ export function buildCodexInteractiveResponse(
     default:
       return assertNever(args.payload.subject);
   }
+}
+
+export function buildCodexMcpElicitationCancellationResponse(): CodexMcpElicitationResponse {
+  return { action: "cancel", content: null };
 }
 
 const codexToPendingInteractionApprovalDecision = {

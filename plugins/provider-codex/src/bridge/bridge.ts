@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import {
   isStandaloneBuiltinCompactCommand,
-  approvalInteractionOutcomeSchema,
+  providerInteractionOutcomeSchema,
   type DynamicTool,
   type PromptInput,
   type ThreadDelta,
@@ -53,6 +53,8 @@ import {
   summarizeCodexMacOsPermissions,
 } from "../extension-kinds.js";
 import {
+  CODEX_MCP_SERVER_ELICITATION_REQUEST_METHOD,
+  buildCodexMcpElicitationCancellationResponse,
   buildCodexInteractiveResponse,
   decodeCodexInteractiveRequest,
   extractCodexMacOsPermissionRequest,
@@ -724,6 +726,18 @@ const codexChildToolCallParamsSchema = z.object({
   arguments: z.unknown(),
 });
 
+function canResolveMcpElicitation(
+  session: CodexBridgeSession,
+  request: DecodedInteractiveRequest,
+): boolean {
+  return (
+    request.turnId !== null &&
+    session.codexThreadId !== null &&
+    request.providerThreadId === session.codexThreadId &&
+    session.openCodexTurnIds.has(request.turnId)
+  );
+}
+
 function handleChildRequest(
   bbThreadId: string,
   serial: number,
@@ -798,6 +812,14 @@ function handleChildRequest(
   }
   const request = decoded;
 
+  if (
+    method === CODEX_MCP_SERVER_ELICITATION_REQUEST_METHOD &&
+    !canResolveMcpElicitation(session, request)
+  ) {
+    responder.result(buildCodexMcpElicitationCancellationResponse());
+    return;
+  }
+
   void sendRuntimeRequest(BRIDGE_INBOUND_REQUEST_METHODS.interactionRequest, {
     providerThreadId: session.codexThreadId ?? request.providerThreadId,
     threadId: session.bbThreadId,
@@ -806,13 +828,25 @@ function handleChildRequest(
     providerNativeIds: true,
   })
     .then((result) => {
-      const outcome = approvalInteractionOutcomeSchema.parse({
+      if (
+        method === CODEX_MCP_SERVER_ELICITATION_REQUEST_METHOD &&
+        (currentSession(bbThreadId, serial) !== session ||
+          !canResolveMcpElicitation(session, request))
+      ) {
+        responder.result(buildCodexMcpElicitationCancellationResponse());
+        return;
+      }
+      const outcome = providerInteractionOutcomeSchema.parse({
         payload: request.payload,
         resolution: result,
       });
       responder.result(buildCodexInteractiveResponse(outcome));
     })
     .catch((error: unknown) => {
+      if (method === CODEX_MCP_SERVER_ELICITATION_REQUEST_METHOD) {
+        responder.result(buildCodexMcpElicitationCancellationResponse());
+        return;
+      }
       responder.error(
         BRIDGE_JSON_RPC_ERRORS.BRIDGE_ERROR,
         error instanceof Error ? error.message : String(error),
