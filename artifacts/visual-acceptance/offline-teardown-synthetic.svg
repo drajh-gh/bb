@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="850" viewBox="0 0 1500 850">
+  <rect width="1500" height="850" fill="#10151b"/>
+  <text x="42" y="66" fill="#f2f6fa" font-family="DejaVu Sans Mono, monospace" font-size="27" font-weight="bold">BB core: pause offline environment teardown retries</text>
+  <text x="42" y="115" fill="#9cc5e8" font-family="DejaVu Sans Mono, monospace" font-size="21">Source under test: 1396e72a4 (tree a94ab7b)</text>
+  <text x="42" y="151" fill="#a9b7c5" font-family="DejaVu Sans Mono, monospace" font-size="21">Observed: 2026-09-25, bb-vps, local in-memory server harness</text>
+  <text x="42" y="214" fill="#f2f6fa" font-family="DejaVu Sans Mono, monospace" font-size="23" font-weight="bold">Live symptom (read-only)</text>
+  <text x="42" y="251" fill="#c7d4df" font-family="DejaVu Sans Mono, monospace" font-size="21">env_ptuv2m9jak on disconnected host_czg377k22i</text>
+  <text x="42" y="286" fill="#c7d4df" font-family="DejaVu Sans Mono, monospace" font-size="21">Failed teardown attempt 13,503 at preflight</text>
+  <text x="42" y="321" fill="#c7d4df" font-family="DejaVu Sans Mono, monospace" font-size="21">No live environment was removed or modified</text>
+  <text x="42" y="386" fill="#f2f6fa" font-family="DejaVu Sans Mono, monospace" font-size="23" font-weight="bold">Synthetic service-boundary checks</text>
+  <text x="42" y="423" fill="#c7d4df" font-family="DejaVu Sans Mono, monospace" font-size="21">Host-owned path, disconnected    → no remove; attempt stays 0</text>
+  <text x="42" y="458" fill="#c7d4df" font-family="DejaVu Sans Mono, monospace" font-size="21">Previous failed teardown, offline → attempt/message retained</text>
+  <text x="42" y="493" fill="#c7d4df" font-family="DejaVu Sans Mono, monospace" font-size="21">Host reconnects                  → one removal attempt resumes</text>
+  <text x="42" y="528" fill="#c7d4df" font-family="DejaVu Sans Mono, monospace" font-size="21">Host-independent removal         → proceeds while host offline</text>
+  <text x="42" y="595" fill="#b8e7bc" font-family="DejaVu Sans Mono, monospace" font-size="21">Focused provider-orchestration tests: 51 / 51 passed</text>
+  <text x="42" y="630" fill="#b8e7bc" font-family="DejaVu Sans Mono, monospace" font-size="21">Guarded @bb/server typecheck: passed</text>
+  <text x="42" y="665" fill="#b8e7bc" font-family="DejaVu Sans Mono, monospace" font-size="21">Formatting and diff checks: passed</text>
+  <rect x="35" y="704" width="1430" height="102" rx="8" fill="#28323c"/>
+  <text x="52" y="743" fill="#ffe0a3" font-family="DejaVu Sans Mono, monospace" font-size="20">Limit: source/test evidence only. No live BB deployment, host</text>
+  <text x="52" y="775" fill="#ffe0a3" font-family="DejaVu Sans Mono, monospace" font-size="20">reconnection, actual cleanup, independent review, or full CI result.</text>
+</svg>

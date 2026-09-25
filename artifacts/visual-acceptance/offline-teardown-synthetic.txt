@@ -1,0 +1,21 @@
+BB core: pause offline environment teardown retries
+Source under test: 1396e72a4 (tree a94ab7b)
+Observed: 2026-09-25, bb-vps, local in-memory server harness
+
+Live symptom read-only:
+  env_ptuv2m9jak on disconnected host_czg377k22i
+  failed teardown attempt 13,503 at preflight
+  no live environment was removed or modified
+
+Synthetic service-boundary checks:
+  host-owned path, disconnected    -> no remove, attempt stays 0
+  previous failed teardown, offline -> attempt/message retained
+  host reconnects                  -> one removal attempt resumes
+  host-independent removal         -> proceeds while host offline
+
+Focused provider-orchestration tests: 51 / 51 passed
+Guarded @bb/server typecheck: passed
+Formatting and diff checks: passed
+
+Limit: source/test evidence only. No live BB deployment, host
+reconnection, actual cleanup, independent review, or full CI result.
