@@ -1414,6 +1414,112 @@ describe("core environment orchestration", () => {
       });
     }));
 
+  it("pauses host-owned path removal while its active host is disconnected", async () =>
+    withTestHarness(async (harness) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const remove = vi.fn(async () => ({ status: "removed" as const }));
+      const fixture = setup(harness, {
+        policy: { retireGraceMs: 0 },
+        remove,
+      });
+      fixture.ask();
+      await fixture.settled();
+      const environmentId = fixture.attach();
+      const disconnected = vi
+        .spyOn(harness.hub, "getDaemonSessionIdForHost")
+        .mockReturnValue(null);
+      await sweepProviderEnvironment(harness.deps, environmentId);
+      const waiting = getEnvironment(harness.db, environmentId);
+      expect(waiting).toMatchObject({
+        teardownAttempt: 0,
+        teardownStatus: null,
+      });
+      expect(waiting?.retireAt).not.toBeNull();
+      vi.setSystemTime(Date.now() + 120_000);
+      await sweepProviderLifecycles(harness.deps);
+      expect(remove).not.toHaveBeenCalled();
+      expect(getEnvironment(harness.db, environmentId)?.teardownAttempt).toBe(
+        0,
+      );
+      disconnected.mockRestore();
+      await sweepProviderLifecycles(harness.deps);
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(getEnvironment(harness.db, environmentId)).toMatchObject({
+        status: "destroyed",
+        teardownStatus: "removed",
+        teardownAttempt: 1,
+      });
+    }));
+
+  it("preserves a failed host-owned teardown without repeated offline attempts", async () =>
+    withTestHarness(async (harness) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const remove = vi.fn(async () =>
+        remove.mock.calls.length === 1
+          ? { status: "failed" as const, message: "busy" }
+          : { status: "removed" as const },
+      );
+      const fixture = setup(harness, {
+        policy: { retireGraceMs: 0 },
+        remove,
+      });
+      fixture.ask();
+      await fixture.settled();
+      const environmentId = fixture.attach();
+      await sweepProviderEnvironment(harness.deps, environmentId);
+      const failed = getEnvironment(harness.db, environmentId);
+      expect(failed).toMatchObject({
+        teardownStatus: "failed",
+        teardownAttempt: 1,
+        teardownMessage: "busy",
+      });
+      vi.setSystemTime(failed!.retireAt!);
+      const disconnected = vi
+        .spyOn(harness.hub, "getDaemonSessionIdForHost")
+        .mockReturnValue(null);
+      await sweepProviderLifecycles(harness.deps);
+      vi.setSystemTime(Date.now() + 120_000);
+      await sweepProviderLifecycles(harness.deps);
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(getEnvironment(harness.db, environmentId)).toMatchObject({
+        teardownStatus: "failed",
+        teardownAttempt: 1,
+        teardownMessage: "busy",
+      });
+      disconnected.mockRestore();
+      await sweepProviderLifecycles(harness.deps);
+      expect(remove).toHaveBeenCalledTimes(2);
+      expect(getEnvironment(harness.db, environmentId)).toMatchObject({
+        status: "destroyed",
+        teardownStatus: "removed",
+        teardownAttempt: 2,
+      });
+    }));
+
+  it("continues host-independent provider removal while its host is disconnected", async () =>
+    withTestHarness(async (harness) => {
+      const remove = vi.fn(async () => ({ status: "removed" as const }));
+      const fixture = setup(harness, {
+        policy: { retireGraceMs: 0 },
+        create: async () => ({
+          status: "created",
+          path: "/tmp/host-independent-removal",
+          ownsPath: false,
+        }),
+        remove,
+      });
+      fixture.ask();
+      await fixture.settled();
+      const environmentId = fixture.attach();
+      vi.spyOn(harness.hub, "getDaemonSessionIdForHost").mockReturnValue(null);
+      await sweepProviderEnvironment(harness.deps, environmentId);
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(getEnvironment(harness.db, environmentId)).toMatchObject({
+        status: "destroyed",
+        teardownStatus: "removed",
+      });
+    }));
+
   it("does not retire an environment under the keep policy", async () =>
     withTestHarness(async (harness) => {
       const fixture = setup(harness, { policy: { retireGraceMs: null } });

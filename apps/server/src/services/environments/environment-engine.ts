@@ -22,6 +22,7 @@ import {
   environmentHasLiveThreads,
   environments,
   getEnvironment,
+  getHost,
   getThread,
   findProjectEnvironmentByHostPath,
   getPreparingEnvironment,
@@ -782,6 +783,14 @@ async function sweepProviderEnvironmentInSlot(
     row = { ...row, retireAt };
   }
   if (row.retireAt !== null && row.retireAt > now) return;
+  if (
+    row.providerOwnsPath &&
+    row.path !== null &&
+    row.hostId !== null &&
+    getHost(deps.db, row.hostId)?.phase === "active" &&
+    deps.hub.getDaemonSessionIdForHost(row.hostId) === null
+  )
+    return;
   if (!requestEnvironmentRemoval(deps, environmentId)) return;
   if (cancelled && row.providerOwnsPath && row.path !== null) {
     await cancelPendingEnvironmentHook(deps, {
